@@ -6,14 +6,21 @@
 //    UPSTREAM_KEY   -> çelësi yt API (fillon me cc_...; i fshehur, nuk duket në kod)
 //    MODEL          -> emri i modelit (opsionale)
 //    SYSTEM_PROMPT  -> personaliteti i bot-it (opsionale)
-//    FALLBACK_URL   -> URL e API-së rezervë FALAS (opsionale,
-//                     parazgjedhja: https://text.pollinations.ai/openai)
-//    FALLBACK_MODEL -> modeli i API-së rezervë (opsionale, parazgjedhja: openai)
+//    FALLBACK_URL   -> URL e API-së rezervë (parazgjedhja: Google Gemini)
+//    FALLBACK_MODEL -> modeli i API-së rezervë (parazgjedhja: gemini-3.6-flash)
 //    FALLBACK_KEY   -> çelësi i API-së rezervë (opsionale; bosh = pa header Authorization)
+//
+//  LOGJIKA: provo primaren me timeout 10s. Nëse dështon (timeout,
+//  problem rrjeti, 401/402/403/429 ose 5xx) -> kalo automatikisht
+//  te fallback-i me timeout 18s. Totali maksimal 28s < limiti 30s i Netlify.
 // ============================================================
 
 const DEFAULT_SYSTEM =
   "Je një asistent virtual miqësor dhe i dobishëm. Përgjigju gjithmonë në gjuhën shqipe, qartë dhe shkurt. Nëse nuk e di diçka, thuaje sinqerisht.";
+
+// Timeout-et (në milisekonda) — mbajnë funksionin brenda limitit 30s të Netlify.
+const PRIMARY_TIMEOUT_MS = 10000;
+const FALLBACK_TIMEOUT_MS = 18000;
 
 function json(statusCode, obj) {
   return {
@@ -21,6 +28,18 @@ function json(statusCode, obj) {
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify(obj),
   };
+}
+
+// fetch me timeout: nëse serveri "ngrin" pa u përgjigjur, e ndërpresim
+// dhe kalojmë te opsioni tjetër në vend që Netlify të na mbyllë pas 30s.
+async function fetchWithTimeout(url, options, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 exports.handler = async (event) => {
@@ -32,12 +51,12 @@ exports.handler = async (event) => {
   const UPSTREAM_KEY = (process.env.UPSTREAM_KEY || "").trim();
   const MODEL = (process.env.MODEL || "").trim() || "claude-opus-4.8";
 
-  // API rezervë FALAS: përdoret automatikisht vetëm kur primari dështon
-  // (kredite të harxhuara, çelës i pavlefshëm, rate limit ose problem rrjeti).
+  // API rezervë: përdoret automatikisht vetëm kur primari dështon.
   const FALLBACK_URL =
     (process.env.FALLBACK_URL || "").trim() ||
-    "https://text.pollinations.ai/openai";
-  const FALLBACK_MODEL = (process.env.FALLBACK_MODEL || "").trim() || "openai";
+    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  const FALLBACK_MODEL =
+    (process.env.FALLBACK_MODEL || "").trim() || "gemini-3.6-flash";
   const FALLBACK_KEY = (process.env.FALLBACK_KEY || "").trim();
 
   if (!UPSTREAM_URL || !UPSTREAM_KEY) {
@@ -62,63 +81,83 @@ exports.handler = async (event) => {
     body.systemPrompt || process.env.SYSTEM_PROMPT || DEFAULT_SYSTEM
   ).trim();
 
+  const requestBody = (model) =>
+    JSON.stringify({
+      model: model,
+      messages: [{ role: "system", content: systemPrompt }].concat(messages),
+      temperature: 0.7,
+      max_tokens: 1000,
+    });
+
   try {
-    let res;
-    let primaryError = false;
+    let res = null;
+    let primaryFailed = false;
 
     try {
-      res = await fetch(UPSTREAM_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + UPSTREAM_KEY,
+      res = await fetchWithTimeout(
+        UPSTREAM_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + UPSTREAM_KEY,
+          },
+          body: requestBody(MODEL),
         },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: [{ role: "system", content: systemPrompt }].concat(messages),
-          temperature: 0.7,
-          max_tokens: 1000,
-        }),
-      });
+        PRIMARY_TIMEOUT_MS
+      );
     } catch (e) {
-      // Dështim rrjeti te primari -> provo fallback-in.
-      primaryError = true;
+      // Timeout ose dështim rrjeti te primari -> provo fallback-in.
+      primaryFailed = true;
     }
 
-    if (
-      primaryError ||
-        (res &&
-          (res.status === 401 ||
-            res.status === 402 ||
-            res.status === 403 ||
-            res.status === 429))
-    ) {
-      // Primari dështoi (kredite të harxhuara / çelës i pavlefshëm /
-      // rate limit / problem rrjeti) -> provo API-në rezervë FALAS
-      // me të njëjtin trup kërkese, por me modelin e fallback-it.
+    const primaryStatus = res ? res.status : 0;
+    const primaryDown =
+      primaryFailed ||
+      primaryStatus === 401 ||
+      primaryStatus === 402 ||
+      primaryStatus === 403 ||
+      primaryStatus === 429 ||
+      primaryStatus === 500 ||
+      primaryStatus === 502 ||
+      primaryStatus === 503 ||
+      primaryStatus === 504;
+
+    if (primaryDown) {
+      // Primari dështoi -> provo API-në rezervë me të njëjtin trup kërkese.
       const fallbackHeaders = { "Content-Type": "application/json" };
       if (FALLBACK_KEY) {
         fallbackHeaders.Authorization = "Bearer " + FALLBACK_KEY;
       }
 
-      res = await fetch(FALLBACK_URL, {
-        method: "POST",
-        headers: fallbackHeaders,
-        body: JSON.stringify({
-          model: FALLBACK_MODEL,
-          messages: [{ role: "system", content: systemPrompt }].concat(messages),
-          temperature: 0.7,
-          max_tokens: 1000,
-        }),
-      });
+      res = await fetchWithTimeout(
+        FALLBACK_URL,
+        {
+          method: "POST",
+          headers: fallbackHeaders,
+          body: requestBody(FALLBACK_MODEL),
+        },
+        FALLBACK_TIMEOUT_MS
+      );
     }
 
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      const msg =
-        (data && data.error && data.error.message) ||
-        "Gabim " + res.status + " nga API-ja.";
+      // Google kthen gabimin ndonjëherë si array — e formatojmë bukur.
+      let msg = "Gabim " + res.status + " nga API-ja.";
+      const errObj = data && data.error;
+      if (errObj) {
+        if (typeof errObj.message === "string" && errObj.message) {
+          msg = errObj.message;
+        } else if (Array.isArray(errObj) && errObj.length) {
+          msg = errObj
+            .map((x) => (x && (x.message || x.code)) || "")
+            .filter(Boolean)
+            .join("; ");
+          if (!msg) msg = "Gabim " + res.status + " nga API-ja.";
+        }
+      }
       return json(res.status, { error: msg });
     }
 
