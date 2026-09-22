@@ -8,6 +8,8 @@
   var sendBtn = $("send-btn");
   var suggestionsEl = $("suggestions");
 
+  function botAvatarHTML() { if (CONFIG.BOT_AVATAR_IMG) return '<img src="' + CONFIG.BOT_AVATAR_IMG + '" alt="Dertli Bot">'; return CONFIG.BOT_AVATAR; }
+
   // SHËNIM: shfletuesi flet VETËM me funksionin tonë në Netlify.
   // Çelësi API rri i fshehur në server — nuk dërgohet kurrë këtu.
   var ENDPOINT = "/.netlify/functions/chat";
@@ -34,7 +36,7 @@
     var wrap = document.createElement("div");
     wrap.className = "message " + who;
     if (who === "bot") {
-      wrap.innerHTML = '<div class="avatar">' + CONFIG.BOT_AVATAR + '</div><div class="bubble">' + formatText(text) + "</div>";
+      wrap.innerHTML = '<div class="avatar">' + botAvatarHTML() + '</div><div class="bubble">' + formatText(text) + "</div>";
     } else {
       wrap.innerHTML = '<div class="bubble">' + formatText(text) + "</div>";
     }
@@ -46,7 +48,7 @@
   function showTyping() {
     typingEl = document.createElement("div");
     typingEl.className = "message bot typing";
-    typingEl.innerHTML = '<div class="avatar">' + CONFIG.BOT_AVATAR + '</div><div class="bubble"><span></span><span></span><span></span></div>';
+    typingEl.innerHTML = '<div class="avatar">' + botAvatarHTML() + '</div><div class="bubble"><span></span><span></span><span></span></div>';
     messagesEl.appendChild(typingEl);
     scrollBottom();
   }
@@ -111,7 +113,7 @@
   function init() {
     document.title = CONFIG.BOT_NAME;
     $("bot-name").textContent = CONFIG.BOT_NAME;
-    $("bot-avatar").textContent = CONFIG.BOT_AVATAR;
+    if (CONFIG.BOT_AVATAR_IMG) { $("bot-avatar").innerHTML = '<img src="' + CONFIG.BOT_AVATAR_IMG + '" alt="Dertli Bot">'; } else { $("bot-avatar").textContent = CONFIG.BOT_AVATAR; }
     document.documentElement.style.setProperty("--primary", CONFIG.THEME_COLOR);
 
     addMessage(CONFIG.WELCOME_MESSAGE, "bot");
