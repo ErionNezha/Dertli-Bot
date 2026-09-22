@@ -24,7 +24,7 @@ const CONFIG = {
 
 
   // Mesazhi i parë që dërgon bot-i kur hapet faqja
-  WELCOME_MESSAGE: "Përshëndetje! 👋 Unë jam Dertli Bot — asistenti personal i Erion Nezhës, Inxhinier Informatike. Pyesmë për projektet, aftësitë apo si mund ta kontaktosh!",
+  WELCOME_MESSAGE: "👋 Përshëndetje! Unë jam Dertli Bot.\n🤖 Asistenti personal i Erion Nezhës\nPyet çfarë të duash. Unë ta gjej përgjigjen. ⚡",
 
 
   // Butona sugjerimesh të shpejta (shfaqen poshtë bisedës)
