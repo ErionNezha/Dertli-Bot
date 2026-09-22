@@ -94,6 +94,23 @@ body{
   background:var(--primary);color:#fff;font-size:20px;flex-shrink:0;
 }
 #send-btn:disabled{opacity:.5;cursor:default}
+/* Icon buttons (mikrofon, bashkëngjitje) */
+.icon-btn{
+  width:48px;height:48px;border-radius:50%;border:1.5px solid #e2e8f0;
+  background:#fff;cursor:pointer;font-size:20px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.icon-btn:hover{border-color:var(--primary)}
+#mic-btn.recording{
+  background:#ef4444;border-color:#ef4444;color:#fff;
+  animation:pulse 1s infinite;
+}
+/* Foto në bisedë */
+.chat-image{
+  max-width:230px;max-height:230px;border-radius:12px;display:block;
+  margin:2px 0;object-fit:cover;
+}
+.img-caption{margin-top:6px}
 /* Mobile */
 @media(max-width:520px){
   body{padding:0}
