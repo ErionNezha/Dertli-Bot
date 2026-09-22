@@ -60,18 +60,12 @@
     scrollBottom();
   }
 
-  // --- Bisedë e re ---
+  // --- Përshëndetja fillestare ---
   function showWelcome() {
     messagesEl.innerHTML = "";
     addMessage(CONFIG.WELCOME_MESSAGE, "bot");
     input.focus();
   }
-  function newChat() {
-    history = [];
-    showWelcome();
-  }
-  var newChatBtn = $("newchat-btn");
-  if (newChatBtn) newChatBtn.addEventListener("click", newChat);
 
   // --- Vlerësimi 👍/👎 (ruhet vetëm lokalisht) ---
   function wireMessageActions(wrap, mid) {
