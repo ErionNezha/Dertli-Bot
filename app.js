@@ -49,6 +49,20 @@
     scrollBottom();
   }
 
+  function addImageMessage(dataUrl, caption, who) {
+    var wrap = document.createElement("div");
+    wrap.className = "message " + who;
+    var inner = '<img src="' + dataUrl + '" class="chat-image" alt="Foto">';
+    if (caption) inner += '<div class="img-caption">' + formatText(caption) + "</div>";
+    if (who === "bot") {
+      wrap.innerHTML = '<div class="avatar">' + botAvatarHTML() + '</div><div class="bubble">' + inner + "</div>";
+    } else {
+      wrap.innerHTML = '<div class="bubble">' + inner + "</div>";
+    }
+    messagesEl.appendChild(wrap);
+    scrollBottom();
+  }
+
   var typingEl = null;
   function showTyping() {
     typingEl = document.createElement("div");
@@ -69,7 +83,23 @@
     addMessage(text, "user");
     input.value = "";
     history.push({ role: "user", content: text });
+    callApi();
+  }
 
+  function sendImage(dataUrl) {
+    if (sending) return;
+    var caption = input.value.trim();
+    input.value = "";
+    var parts = [
+      { type: "text", text: caption || "Përshkruaj këtë foto shkurt në shqip." },
+      { type: "image_url", image_url: { url: dataUrl } }
+    ];
+    history.push({ role: "user", content: parts });
+    addImageMessage(dataUrl, caption, "user");
+    callApi();
+  }
+
+  function callApi() {
     sending = true;
     sendBtn.disabled = true;
     showTyping();
@@ -114,6 +144,74 @@
     e.preventDefault();
     send(input.value);
   });
+
+  // --- Zëri (mikrofon): Web Speech API, shqip ---
+  var micBtn = $("mic-btn");
+  var recognition = null;
+  var recognizing = false;
+  function toggleVoice() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      addMessage("⚠️ Shfletuesi yt nuk e mbështet diktimin me zë. Provo Chrome-in.", "bot");
+      return;
+    }
+    if (recognizing) { try { recognition.stop(); } catch (e) {} return; }
+    recognition = new SR();
+    recognition.lang = "sq-AL";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = function (e) {
+      var t = e.results[0][0].transcript;
+      input.value = (input.value ? input.value + " " : "") + t;
+      input.focus();
+    };
+    recognition.onend = function () {
+      recognizing = false;
+      micBtn.classList.remove("recording");
+    };
+    recognition.onerror = function () {
+      recognizing = false;
+      micBtn.classList.remove("recording");
+    };
+    try {
+      recognition.start();
+      recognizing = true;
+      micBtn.classList.add("recording");
+    } catch (e) {}
+  }
+  if (micBtn) micBtn.addEventListener("click", toggleVoice);
+
+  // --- Foto: zgjidh, zvogëlo, dërgo te Gemini ---
+  var attachBtn = $("attach-btn");
+  var imageInput = $("image-input");
+  if (attachBtn && imageInput) {
+    attachBtn.addEventListener("click", function () { imageInput.click(); });
+    imageInput.addEventListener("change", function () {
+      var file = imageInput.files && imageInput.files[0];
+      imageInput.value = "";
+      if (!file) return;
+      if (!file.type || file.type.indexOf("image/") !== 0) {
+        addMessage("⚠️ Zgjidh një skedar foto.", "bot");
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var maxDim = 1024;
+          var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          var canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          sendImage(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = function () { addMessage("⚠️ Fotoja nuk u lexua.", "bot"); };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   function init() {
     document.title = CONFIG.BOT_NAME;
