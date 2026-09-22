@@ -113,6 +113,7 @@
   function init() {
     document.title = CONFIG.BOT_NAME;
     $("bot-name").textContent = CONFIG.BOT_NAME;
+    if ($("bot-subtitle")) { $("bot-subtitle").textContent = CONFIG.BOT_SUBTITLE || ""; }
     if (CONFIG.BOT_AVATAR_IMG) { $("bot-avatar").innerHTML = '<img src="' + CONFIG.BOT_AVATAR_IMG + '" alt="Dertli Bot">'; } else { $("bot-avatar").textContent = CONFIG.BOT_AVATAR; }
     document.documentElement.style.setProperty("--primary", CONFIG.THEME_COLOR);
 
