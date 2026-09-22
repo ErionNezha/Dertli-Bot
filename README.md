@@ -54,3 +54,11 @@
 - 💼 LinkedIn: https://linkedin.com/in/erionnezha
 - 📸 Instagram: https://instagram.com/erjonixx
 - 📧 Email: erjonixx@proton.me
+
+---
+
+## 📄 Licenca
+
+© 2026 Erion Nezha — **All rights reserved.**
+
+Kodi publikohet vetëm për qëllime portofoli. Ndalohet kopjimi, modifikimi apo rishpërndarja pa lejen me shkrim të autorit. Shih skedarin [LICENSE](LICENSE) për detaje.
