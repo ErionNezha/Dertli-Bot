@@ -15,7 +15,7 @@ const CONFIG = {
 
 
   // Nën-titulli i personalizuar për Erion Nezhën
-  BOT_SUBTITLE: "Asistenti i Erion Nezhës • Inxhinier Informatike",
+  BOT_SUBTITLE: "Asistenti i Erion Nezhës",
 
 
   // Emoji / avatar i bot-it
