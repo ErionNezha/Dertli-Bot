@@ -32,6 +32,7 @@ const CONFIG = {
     "Kush është Erioni?",
     "Projektet e tij",
     "Aftësitë teknike",
+    "📺 Çmimet IPTV",
     "Kontakti"
   ],
 
