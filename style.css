@@ -76,6 +76,12 @@ body{
 .suggestions:empty{display:none}
 .chip{
   flex-shrink:0;background:#fff;border:1.5px solid var(--primary);color:var(--primary);
+
+.bot-avatar{overflow:hidden;padding:0}
+.bot-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.message .avatar{overflow:hidden;padding:0}
+.message .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+
   padding:7px 14px;border-radius:20px;font-size:13px;cursor:pointer;font-weight:600;
 }
 .chip:hover{background:var(--primary);color:#fff}
