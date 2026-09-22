@@ -42,9 +42,51 @@ async function fetchWithTimeout(url, options, ms) {
   }
 }
 
+// Mbrojtje nga spam-i: max 30 kërkesa/orë për IP (mbron kuotën falas të Gemini-t).
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const rateBuckets = new Map();
+
+function clientIp(event) {
+  const h = event.headers || {};
+  const fwd = h["x-forwarded-for"] || h["X-Forwarded-For"] || "";
+  if (fwd) return String(fwd).split(",")[0].trim();
+  return String(
+    h["client-ip"] || h["x-nf-client-connection-ip"] || "unknown"
+  ).trim();
+}
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  let arr = rateBuckets.get(ip);
+  if (!arr) {
+    arr = [];
+    rateBuckets.set(ip, arr);
+  }
+  while (arr.length && now - arr[0] > RATE_LIMIT_WINDOW_MS) arr.shift();
+  if (arr.length >= RATE_LIMIT_MAX) return true;
+  arr.push(now);
+  if (rateBuckets.size > 5000) {
+    for (const [k, v] of rateBuckets) {
+      if (!v.length || now - v[v.length - 1] > RATE_LIMIT_WINDOW_MS)
+        rateBuckets.delete(k);
+      if (rateBuckets.size <= 4000) break;
+    }
+  }
+  return false;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Vetëm kërkesa POST lejohet." });
+  }
+
+  if (isRateLimited(clientIp(event))) {
+    return json(429, {
+      error:
+        "Ke dërguar shumë mesazhe në një kohë të shkurtër. " +
+        "Pusho pak dhe provo përsëri pas disa minutash. ⏳",
+    });
   }
 
   const UPSTREAM_URL = (process.env.UPSTREAM_URL || "").trim();
