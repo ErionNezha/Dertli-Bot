@@ -18,6 +18,10 @@
   var sending = false;
 
   function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+    
+    
+    
+  
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -27,7 +31,8 @@
 
   function formatText(text) {
     var html = escapeHtml(text);
-    html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:12px;display:block;margin:8px 0">');    html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    
     html = html.replace(/\n/g, "<br>");
     return html;
   }
