@@ -5,8 +5,8 @@
 
   **Asistenti personal AI i Erion Nezhës — flet shqip 🇦🇱**
 
-  [![Live Demo](https://img.shields.io/badge/🌐_Provoje_Live-00d4ff?style=for-the-badge)](https://dertli-bot.netlify.app)
-  [![Netlify](https://img.shields.io/badge/Deployed_on-Netlify-00C7B7?style=flat-square&logo=netlify&logoColor=white)](https://dertli-bot.netlify.app)
+  [![Live Demo](https://img.shields.io/badge/🌐_Provoje_Live-00d4ff?style=for-the-badge)](https://dertlibot.netlify.app)
+  [![Netlify](https://img.shields.io/badge/Deployed_on-Netlify-00C7B7?style=flat-square&logo=netlify&logoColor=white)](https://dertlibot.netlify.app)
 </div>
 
 ---
@@ -44,7 +44,7 @@
 
 ## 🚀 Live Demo
 
-**https://dertli-bot.netlify.app**
+**https://dertlibot.netlify.app**
 
 ## 👨‍💻 Autori
 
