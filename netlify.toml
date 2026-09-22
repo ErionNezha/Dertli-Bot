@@ -1,0 +1,7 @@
+# Konfigurimi për Netlify
+[build]
+  publish = "."
+
+# Funksionet e serverit (aty ku fshihet çelësi API)
+[functions]
+  directory = "netlify/functions"

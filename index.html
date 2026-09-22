@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chatbot</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="chat-shell">
+  <header class="chat-header">
+    <div class="bot-identity">
+      <div class="bot-avatar" id="bot-avatar">🤖</div>
+      <div>
+        <div class="bot-name" id="bot-name">Asistenti Im</div>
+        <div class="bot-status"><span class="dot"></span> Online</div>
+      </div>
+    </div>
+  </header>
+
+  <main id="messages" class="chat-messages"></main>
+
+  <div id="suggestions" class="suggestions"></div>
+
+  <form id="chat-form" class="chat-input" autocomplete="off">
+    <input id="user-input" type="text" placeholder="Shkruaj mesazhin..." autocomplete="off">
+    <button id="send-btn" type="submit" title="Dërgo">➤</button>
+  </form>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
