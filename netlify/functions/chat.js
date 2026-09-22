@@ -87,7 +87,11 @@ exports.handler = async (event) => {
 
     if (
       primaryError ||
-      (res && (res.status === 401 || res.status === 402 || res.status === 429))
+        (res &&
+          (res.status === 401 ||
+            res.status === 402 ||
+            res.status === 403 ||
+            res.status === 429))
     ) {
       // Primari dështoi (kredite të harxhuara / çelës i pavlefshëm /
       // rate limit / problem rrjeti) -> provo API-në rezervë FALAS
