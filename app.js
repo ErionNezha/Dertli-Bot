@@ -8,11 +8,6 @@
   var sendBtn = $("send-btn");
   var suggestionsEl = $("suggestions");
 
-  // --- Emri i vizitorit: ruhet VETËM lokalisht, nuk dërgohet askund ---
-  var visitorName = "";
-  var awaitingName = false;
-  try { visitorName = localStorage.getItem("dertli-name") || ""; } catch (e) {}
-
   // --- Vlerësimet 👍/👎: ruhen VETËM lokalisht ---
   var feedbackStore = {};
   try { feedbackStore = JSON.parse(localStorage.getItem("dertli-feedback") || "{}"); } catch (e) { feedbackStore = {}; }
@@ -54,11 +49,10 @@
       botMsgSeq++;
       var mid = "m" + Date.now() + "-" + botMsgSeq;
       wrap.innerHTML = '<div class="avatar">' + botAvatarHTML() + '</div><div class="bubble-wrap"><div class="bubble">' + formatText(text) + '</div><div class="msg-actions">'
-        + '<button type="button" class="msg-act copy-btn" title="Kopjo përgjigjen">📋 Kopjo</button>'
         + '<button type="button" class="msg-act fb-up" title="Më pëlqeu">👍</button>'
         + '<button type="button" class="msg-act fb-down" title="Nuk më pëlqeu">👎</button>'
         + "</div></div>";
-      wireMessageActions(wrap, text, mid);
+      wireMessageActions(wrap, mid);
     } else {
       wrap.innerHTML = '<div class="bubble">' + formatText(text) + "</div>";
     }
@@ -66,90 +60,21 @@
     scrollBottom();
   }
 
-  // --- Kopjo përgjigjen ---
-  function copyText(text, btn) {
-    function done(ok) {
-      if (!btn) return;
-      var label = btn.textContent;
-      btn.textContent = ok ? "✅ Kopjuar" : "⚠️ Dështoi";
-      setTimeout(function () { btn.textContent = "📋 Kopjo"; }, 1500);
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
-    } else {
-      try {
-        var ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-        done(true);
-      } catch (e) { done(false); }
-    }
-  }
-
-  // --- Zëri i botit (lexon përgjigjet me zë): Web Speech Synthesis ---
-  var ttsBtn = $("tts-btn");
-  var ttsEnabled = false;
-  try { ttsEnabled = localStorage.getItem("dertli-tts") === "1"; } catch (e) {}
-  function stopSpeaking() { try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); } catch (e) {} }
-  function speak(text) {
-    if (!ttsEnabled) return;
-    if (!("speechSynthesis" in window)) return;
-    stopSpeaking();
-    try {
-      var clean = String(text).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, "").replace(/\s{2,}/g, " ").trim();
-      if (!clean) return;
-      var u = new SpeechSynthesisUtterance(clean);
-      u.lang = "sq-AL";
-      u.rate = 1;
-      var voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
-      for (var i = 0; i < voices.length; i++) {
-        if (voices[i].lang && voices[i].lang.toLowerCase().indexOf("sq") === 0) { u.voice = voices[i]; break; }
-      }
-      window.speechSynthesis.speak(u);
-    } catch (e) {}
-  }
-  function paintTts() {
-    if (!ttsBtn) return;
-    ttsBtn.textContent = ttsEnabled ? "🔊" : "🔇";
-    ttsBtn.classList.toggle("muted", !ttsEnabled);
-    ttsBtn.title = ttsEnabled ? "Fik zërin e botit" : "Ndiz zërin e botit";
-  }
-  if (ttsBtn) ttsBtn.addEventListener("click", function () {
-    ttsEnabled = !ttsEnabled;
-    try { localStorage.setItem("dertli-tts", ttsEnabled ? "1" : "0"); } catch (e) {}
-    if (!ttsEnabled) stopSpeaking();
-    paintTts();
-  });
-  paintTts();
-
-  // --- Bisedë e re + emri i vizitorit ---
+  // --- Bisedë e re ---
   function showWelcome() {
     messagesEl.innerHTML = "";
     addMessage(CONFIG.WELCOME_MESSAGE, "bot");
-    if (!visitorName) {
-      awaitingName = true;
-      addMessage("Si quhesh? 😊 Shkruaj emrin tënd që të të njoh.", "bot");
-      input.focus();
-    }
+    input.focus();
   }
   function newChat() {
-    stopSpeaking();
     history = [];
-    awaitingName = false;
     showWelcome();
   }
   var newChatBtn = $("newchat-btn");
   if (newChatBtn) newChatBtn.addEventListener("click", newChat);
 
   // --- Vlerësimi 👍/👎 (ruhet vetëm lokalisht) ---
-  function wireMessageActions(wrap, text, mid) {
-    var copyBtn = wrap.querySelector(".copy-btn");
-    if (copyBtn) copyBtn.addEventListener("click", function () { copyText(text, copyBtn); });
+  function wireMessageActions(wrap, mid) {
     var up = wrap.querySelector(".fb-up"), down = wrap.querySelector(".fb-down");
     function paint() {
       var v = feedbackStore[mid];
@@ -196,20 +121,6 @@
   function send(text) {
     text = (text || "").trim();
     if (!text || sending) return;
-
-    // --- Kapja e emrit të vizitorit (ruhet vetëm lokalisht) ---
-    if (awaitingName) {
-      var nm = text.replace(/\s{2,}/g, " ").slice(0, 40);
-      visitorName = nm;
-      awaitingName = false;
-      try { localStorage.setItem("dertli-name", nm); } catch (e) {}
-      addMessage(text, "user");
-      input.value = "";
-      var greet = "Kënaqësi që të njoha, " + nm + "! 😊 Si mund të të ndihmoj sot?";
-      addMessage(greet, "bot");
-      speak(greet);
-      return;
-    }
 
     addMessage(text, "user");
     input.value = "";
@@ -262,7 +173,6 @@
         if (!reply) throw new Error("Nuk u mor përgjigje.");
         history.push({ role: "assistant", content: reply });
         addMessage(reply, "bot");
-        speak(reply);
       })
       .catch(function (err) {
         addMessage("⚠️ " + err.message, "bot");
