@@ -104,3 +104,10 @@ body{
 .bot-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .message .avatar{overflow:hidden;padding:0}
 .message .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+/* Premium header (dark navy + gold) */
+.chat-header{background:linear-gradient(135deg,#0a0f1e 0%,#141b31 60%,#1a1430 100%);border-bottom:2px solid #c9a227;padding:14px 18px}
+.bot-avatar{width:56px;height:56px;border-radius:50%;border:2px solid #c9a227;box-shadow:0 0 18px rgba(201,162,39,.45);overflow:hidden;padding:0;background:#0a0f1e;flex-shrink:0}
+.bot-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.bot-titles{display:flex;flex-direction:column;justify-content:center}
+.bot-name{font-family:Georgia,'Times New Roman',serif;font-size:19px;letter-spacing:1px;color:#f5e9c8}
+.bot-subtitle{font-size:11.5px;color:#c9a227;opacity:.92;letter-spacing:.4px;margin-top:3px}
