@@ -53,7 +53,7 @@
 **Erion Nezha** — Software Engineer
 
 - 🌐 Portfolio: https://erionnezha.netlify.app/
-- 💼 LinkedIn: https://linkedin.com/in/erion-nezha
+- 💼 LinkedIn: https://www.linkedin.com/in/erion-nezha/
 - 📸 Instagram: https://instagram.com/erjonixx
 - 📧 Email: erjonixx@proton.me
 
