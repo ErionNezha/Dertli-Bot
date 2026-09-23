@@ -1,13 +1,15 @@
 <div align="center">
   <img src="logo.png" width="160" alt="Dertli Bot Logo" />
 
-  # 🤖 DERTLI BOT
+  # 🤖 DERTLI BOT 🇦🇱
 
   **Asistenti personal AI i Erion Nezhës — flet shqip 🇦🇱**
 
   [![Live Demo](https://img.shields.io/badge/🌐_Provoje_Live-00d4ff?style=for-the-badge)](https://dertlibot.netlify.app)
   [![Netlify](https://img.shields.io/badge/Deployed_on-Netlify-00C7B7?style=flat-square&logo=netlify&logoColor=white)](https://dertlibot.netlify.app)
 </div>
+
+![Pamje nga demo](screenshot.png)
 
 ---
 
@@ -62,3 +64,28 @@
 © 2026 Erion Nezha — **All rights reserved.**
 
 Kodi publikohet vetëm për qëllime portofoli. Ndalohet kopjimi, modifikimi apo rishpërndarja pa lejen me shkrim të autorit. Shih skedarin [LICENSE](LICENSE) për detaje.
+
+---
+
+# 🤖 DERTLI BOT 🇬🇧 (English)
+
+**Erion Nezha's personal AI assistant — speaks Albanian 🇦🇱**
+
+[![Live Demo](https://img.shields.io/badge/🌐_Try_Live-00d4ff?style=for-the-badge)](https://dertlibot.netlify.app)
+
+## ✨ Features
+
+- 💬 **Chat in Albanian** — responds naturally in Albanian
+- ⚡ **Hybrid AI** — CodeCraft as primary, automatic fallback to Gemini when credits run out
+- 👋 **Personal greeting** — welcome message and quick-replies
+- 👍👎 **Ratings** — users rate answers (stored locally in the browser)
+- 🖼️ **Image support** — shows the IPTV packages image when asked about prices
+- 🛡️ **Server-side security** — API keys never exposed in the browser; rate limiting 30 requests/hour per IP
+
+## 🚀 Live Demo
+
+**https://dertlibot.netlify.app**
+
+## 📄 License
+
+© 2026 Erion Nezha — **All rights reserved.** Published for portfolio purposes only.
