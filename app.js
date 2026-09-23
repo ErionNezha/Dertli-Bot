@@ -36,6 +36,7 @@
 
   function formatText(text) {
     var html = escapeHtml(text);
+    html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
     html = html.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:12px;display:block;margin:8px 0">');    html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     
     html = html.replace(/\n/g, "<br>");
@@ -58,6 +59,15 @@
     }
     messagesEl.appendChild(wrap);
     scrollBottom();
+  }
+
+  // --- Njoftim për demo-n statike në GitHub Pages (nuk ka backend Netlify këtu) ---
+  if (/github\.io$/.test(location.hostname)) {
+    var note = document.createElement("div");
+    note.setAttribute("style", "background:#fff8e1;color:#7a5c00;font-size:13px;text-align:center;padding:8px 12px;border-bottom:1px solid #f0dfae;");
+    note.innerHTML = "👀 Kjo është demo statike — biseda live funksionon te " +
+      '<a href="https://dertlibot.netlify.app" target="_blank" rel="noopener" style="color:#b3540a;font-weight:700;">dertlibot.netlify.app</a>';
+    messagesEl.parentNode.insertBefore(note, messagesEl);
   }
 
   // --- Përshëndetja fillestare ---
@@ -161,6 +171,10 @@
           if (out.status === 429) {
             throw new Error("Ke dërguar shumë mesazhe në një kohë të shkurtër. Pusho pak dhe provo përsëri pas disa minutash. ⏳");
           }
+          // Demo statike në GitHub Pages: nuk ka backend Netlify këtu.
+          if (out.status === 404 || out.status === 405) {
+            throw new Error("STATIC_DEMO");
+          }
           throw new Error((out.data && out.data.error) || ("Gabim " + out.status));
         }
         var reply = String(out.data.reply || "").trim();
@@ -169,7 +183,11 @@
         addMessage(reply, "bot");
       })
       .catch(function (err) {
-        addMessage("⚠️ " + err.message, "bot");
+        if (err.message === "STATIC_DEMO" || err instanceof TypeError) {
+          addMessage("⚠️ Kjo faqe është demo statike (GitHub Pages) dhe nuk ka lidhje me serverin. Bisedo me Dertli Bot live këtu: https://dertlibot.netlify.app 💬", "bot");
+        } else {
+          addMessage("⚠️ " + err.message, "bot");
+        }
       })
       .then(function () {
         sending = false;
