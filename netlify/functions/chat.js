@@ -10,9 +10,11 @@
 //    FALLBACK_MODEL -> modeli i API-së rezervë (parazgjedhja: gemini-3.6-flash)
 //    FALLBACK_KEY   -> çelësi i API-së rezervë (opsionale; bosh = pa header Authorization)
 //
-//  LOGJIKA: provo primaren me timeout 10s. Nëse dështon (timeout,
-//  problem rrjeti, 401/402/403/429 ose 5xx) -> kalo automatikisht
-//  te fallback-i me timeout 18s. Totali maksimal 28s < limiti 30s i Netlify.
+//  LOGJIKA (LIGJ — urdhër i përdoruesit): provo primaren (CodeCraft) me timeout 10s.
+//  Nëse NUK kthen përgjigje — për ÇDO arsye — kalo DIREKT te Gemini (rezerva)
+//  me timeout 18s. Totali maksimal 28s < limiti 30s i Netlify.
+//  Nëse edhe Gemini nuk përgjigjet, kthehet një mesazh miqësor shqip si
+//  përgjigje normale — boti nuk del KURRË "down".
 // ============================================================
 
 const DEFAULT_SYSTEM =
@@ -28,6 +30,16 @@ function json(statusCode, obj) {
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify(obj),
   };
+}
+
+// LIGJ (urdhër i përdoruesit): boti nuk del KURRË "down".
+// Kur asnjë API nuk përgjigjet, kthehet ky mesazh miqësor si përgjigje normale.
+const GRACEFUL_REPLY =
+  "Më fal, po kaloj një ngarkesë të përkohshme dhe nuk po lidhem dot " +
+  "me inteligjencën artificiale tani. Provo përsëri pas pak çastesh. 🙏";
+
+function graceful() {
+  return json(200, { reply: GRACEFUL_REPLY });
 }
 
 // fetch me timeout: nëse serveri "ngrin" pa u përgjigjur, e ndërpresim
@@ -189,54 +201,43 @@ exports.handler = async (event) => {
       primaryFailed = true;
     }
 
-    const primaryStatus = res ? res.status : 0;
-    const primaryDown =
-      primaryFailed ||
-      primaryStatus === 401 ||
-      primaryStatus === 402 ||
-      primaryStatus === 403 ||
-      primaryStatus === 429 ||
-      primaryStatus === 500 ||
-      primaryStatus === 502 ||
-      primaryStatus === 503 ||
-      primaryStatus === 504;
+    // LIGJ: kur primari (CodeCraft) nuk kthen përgjigje — për ÇDO arsye
+    // (timeout, rrjet, apo çdo status jo-OK) — kalohet DIREKT te Gemini.
+    const primaryDown = primaryFailed || !res || !res.ok;
+    if (primaryFailed) console.error("[chat] primari dështoi (timeout/rrjet)");
+    else if (res && !res.ok)
+      console.error("[chat] primari ktheu status " + res.status);
 
     if (primaryDown) {
-      // Primari dështoi -> provo API-në rezervë me të njëjtin trup kërkese.
+      // Primari dështoi -> provo API-në rezervë (Gemini) me të njëjtin trup kërkese.
       const fallbackHeaders = { "Content-Type": "application/json" };
       if (FALLBACK_KEY) {
         fallbackHeaders.Authorization = "Bearer " + FALLBACK_KEY;
       }
 
-      res = await fetchWithTimeout(
-        FALLBACK_URL,
-        {
-          method: "POST",
-          headers: fallbackHeaders,
-          body: requestBody(FALLBACK_MODEL),
-        },
-        FALLBACK_TIMEOUT_MS
-      );
+      try {
+        res = await fetchWithTimeout(
+          FALLBACK_URL,
+          {
+            method: "POST",
+            headers: fallbackHeaders,
+            body: requestBody(FALLBACK_MODEL),
+          },
+          FALLBACK_TIMEOUT_MS
+        );
+      } catch (e) {
+        // Edhe Gemini nuk u arrit -> përgjigje miqësore, kurrë "down".
+        console.error("[chat] fallback-i dështoi: " + (e && e.message));
+        return graceful();
+      }
     }
 
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      // Google kthen gabimin ndonjëherë si array — e formatojmë bukur.
-      let msg = "Gabim " + res.status + " nga API-ja.";
-      const errObj = data && data.error;
-      if (errObj) {
-        if (typeof errObj.message === "string" && errObj.message) {
-          msg = errObj.message;
-        } else if (Array.isArray(errObj) && errObj.length) {
-          msg = errObj
-            .map((x) => (x && (x.message || x.code)) || "")
-            .filter(Boolean)
-            .join("; ");
-          if (!msg) msg = "Gabim " + res.status + " nga API-ja.";
-        }
-      }
-      return json(res.status, { error: msg });
+      // Edhe rezerva ktheu gabim -> përgjigje miqësore, kurrë "down".
+      console.error("[chat] fallback ktheu status " + res.status);
+      return graceful();
     }
 
     const reply =
@@ -244,9 +245,13 @@ exports.handler = async (event) => {
         ? String(data.choices[0].message.content || "").trim()
         : "";
 
-    if (!reply) return json(502, { error: "API-ja nuk ktheu përgjigje." });
+    if (!reply) {
+      console.error("[chat] API-ja nuk ktheu përgjigje");
+      return graceful();
+    }
     return json(200, { reply: reply });
   } catch (err) {
-    return json(500, { error: "Problem me lidhjen me API-në: " + err.message });
+    console.error("[chat] gabim i papritur: " + (err && err.message));
+    return graceful();
   }
 };
