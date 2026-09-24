@@ -26,7 +26,8 @@ const DEFAULT_SYSTEM =
   "shkruaj fraza natyrale shqipe, jo përkthime fjalë-për-fjalë nga anglishtja; " +
   "shmang fjalët angleze kur ekziston fjala shqipe përkatëse; " +
   "përdor drejtshkrimin standard të shqipes. " +
-  "Përgjigju qartë dhe shkurt. Nëse nuk e di diçka, thuaje sinqerisht.";
+  "Përgjigju qartë dhe shkurt. Nëse nuk e di diçka, thuaje sinqerisht. " +
+  "Para se të dërgosh përgjigjen, rishikoje për gabime drejtshkrimore e gramatikore dhe korrigjoji.";
 
 // Timeout-et (në milisekonda) — mbajnë funksionin brenda limitit 30s të Netlify.
 const PRIMARY_TIMEOUT_MS = 10000;
@@ -194,7 +195,7 @@ exports.handler = async (event) => {
     JSON.stringify({
       model: model,
       messages: [{ role: "system", content: systemPrompt }].concat(safeMessages),
-      temperature: 0.7,
+      temperature: 0.4,
       max_tokens: 1000,
     });
 
