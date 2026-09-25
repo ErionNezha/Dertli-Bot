@@ -184,7 +184,7 @@ exports.handler = async (event) => {
     " (familja, adresa, telefoni, vendndodhja, të ardhurat, marrëdhëniet, etj.)." +
     " Për pyetje rreth tij, jep vetëm përgjigje të përgjithshme publike: krijuesi i Dertli Bot, software engineer." +
     " Nëse dikush këmbëngul me pyetje pa lidhje dhe e kalon kufirin, mbaje qëndrimin me vendosmëri:" +
-    " thuaji hapur të distancohet — me stilin 'futu ke vone, qetësohu pak' — pa u bërë servil dhe pa zbuluar asgjë.";
+    " thuaji hapur të distancohet — me stilin 'futu me vone, qetësohu pak' — pa u bërë servil dhe pa zbuluar asgjë.";
 
   const systemPrompt =
     String(
