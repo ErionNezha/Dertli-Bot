@@ -241,20 +241,40 @@ exports.handler = async (event) => {
         fallbackHeaders.Authorization = "Bearer " + FALLBACK_KEY;
       }
 
-      try {
-        res = await fetchWithTimeout(
-          FALLBACK_URL,
-          {
-            method: "POST",
-            headers: fallbackHeaders,
-            body: requestBody(FALLBACK_MODEL),
-          },
-          FALLBACK_TIMEOUT_MS
-        );
-      } catch (e) {
-        // Edhe Gemini nuk u arrit -> përgjigje miqësore, kurrë "down".
-        console.error("[chat] fallback-i dështoi: " + (e && e.message));
-        return graceful();
+      // Gemini ndonjëherë kthen 503 kalimtar (bllokim i përkohshëm nga ana e
+      // Google) — në këtë rast provohet edhe një herë pas një pritjeje të
+      // shkurtër, brenda buxhetit të timeout-it. (2026-09-25)
+      const FB_ATTEMPT_MS = 7000;
+      const FB_RETRY_WAIT_MS = 2500;
+      let fbAttempt = 0;
+      let fbDone = false;
+      while (!fbDone && fbAttempt < 2) {
+        fbAttempt++;
+        try {
+          res = await fetchWithTimeout(
+            FALLBACK_URL,
+            {
+              method: "POST",
+              headers: fallbackHeaders,
+              body: requestBody(FALLBACK_MODEL),
+            },
+            FB_ATTEMPT_MS
+          );
+        } catch (e) {
+          if (fbAttempt < 2) {
+            await new Promise(function (r) { setTimeout(r, FB_RETRY_WAIT_MS); });
+            continue;
+          }
+          // Edhe Gemini nuk u arrit -> përgjigje miqësore, kurrë "down".
+          console.error("[chat] fallback-i dështoi: " + (e && e.message));
+          return graceful();
+        }
+        if (!res.ok && (res.status === 503 || res.status === 429) && fbAttempt < 2) {
+          console.error("[chat] fallback ktheu status " + res.status + " — riprovoj");
+          await new Promise(function (r) { setTimeout(r, FB_RETRY_WAIT_MS); });
+          continue;
+        }
+        fbDone = true;
       }
     }
 
