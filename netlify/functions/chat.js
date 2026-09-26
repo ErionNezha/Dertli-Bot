@@ -11,8 +11,9 @@
 //    FALLBACK_KEY   -> çelësi i API-së rezervë (opsionale; bosh = pa header Authorization)
 //
 //  LOGJIKA (LIGJ — urdhër i përdoruesit): provo primaren (CodeCraft) me timeout 10s.
-//  Nëse NUK kthen përgjigje — për ÇDO arsye — kalo DIREKT te Gemini (rezerva)
-//  me timeout 18s. Totali maksimal 28s < limiti 30s i Netlify.
+//  Nëse NUK kthen përgjigje — për ÇDO arsye — kalo DIREKT te Gemini (rezerva):
+//  2 tentativa nga 7s secila, me 2.5s pritje mes tyre.
+//  Totali maksimal ~26.5s < limiti 30s i Netlify.
 //  Nëse edhe Gemini nuk përgjigjet, kthehet një mesazh miqësor shqip si
 //  përgjigje normale — boti nuk del KURRË "down".
 // ============================================================
