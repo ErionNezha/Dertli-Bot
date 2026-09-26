@@ -93,7 +93,11 @@ body{
 .suggestions{
   display:flex;gap:8px;overflow-x:auto;padding:10px 14px;
   background:#f8fafc;border-top:1px solid #e2e8f0;flex-shrink:0;
+  scrollbar-width:none; /* Firefox: fshih shiritin, rrëshqitja mbetet */
+  -ms-overflow-style:none; /* IE/Edge */
+  scroll-padding:0 14px;
 }
+.suggestions::-webkit-scrollbar{display:none} /* Chrome/Safari */
 .suggestions:empty{display:none}
 .chip{
   flex-shrink:0;background:#fff;border:1.5px solid var(--primary);color:var(--primary);
