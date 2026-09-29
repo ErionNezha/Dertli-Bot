@@ -42,5 +42,5 @@ const CONFIG = {
 
 
   // Ngjyra kryesore e dizajnit
-  THEME_COLOR: "#0f1b2d"
+  THEME_COLOR: "#d4af37"
 };
