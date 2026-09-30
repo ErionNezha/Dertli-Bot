@@ -337,7 +337,7 @@ exports.handler = async (event) => {
           "X-Title": "Dertli Bot",
         },
         body: openAIBody(
-          env("OPENROUTER_MODEL") || "meta-llama/llama-3.3-70b-instruct:free"
+          env("OPENROUTER_MODEL") || "qwen/qwen3.8-27b:free"
         ),
       }),
       parse: parseOpenAI,
