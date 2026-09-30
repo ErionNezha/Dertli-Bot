@@ -188,3 +188,39 @@ body{
   .bot-name,.dot,.typing span,#mic-btn.recording{animation:none}
   .message{animation:none}
 }
+/* ---------- Animime premium (te lehta, vetem transform/opacity) ---------- */
+/* 2. Logo me frymemarrje */
+.bot-avatar{animation:breathe 4.5s ease-in-out infinite}
+@keyframes breathe{
+  0%,100%{box-shadow:0 0 14px rgba(212,175,55,.22)}
+  50%{box-shadow:0 0 28px rgba(212,175,55,.5)}
+}
+/* 3. Pluhur ari ambient */
+.chat-shell{position:relative;z-index:1}
+.dust{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.dust span{
+  position:absolute;bottom:-12px;border-radius:50%;
+  background:radial-gradient(circle,rgba(242,216,121,.85),rgba(212,175,55,0) 70%);
+  opacity:0;animation:rise linear infinite;
+}
+@keyframes rise{
+  0%{transform:translateY(0);opacity:0}
+  12%{opacity:.65}
+  85%{opacity:.2}
+  100%{transform:translateY(-108vh);opacity:0}
+}
+/* 4a. Butoni Dergo "tkurret" kur shtypet */
+#send-btn:active{transform:scale(.9)}
+/* 4b. Mesazhi yt hyn me pop te lehte */
+.message.user{animation:popIn .28s cubic-bezier(.2,.9,.3,1.25) both}
+@keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+/* 1. Kursori i typewriter-it */
+.tw-caret{
+  display:inline-block;width:2px;height:1.05em;background:var(--gold);
+  margin-left:3px;vertical-align:-3px;animation:blink 1s steps(1) infinite;
+}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){
+  .bot-avatar,.dust span,.tw-caret{animation:none}
+  .dust{display:none}
+}
