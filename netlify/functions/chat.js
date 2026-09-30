@@ -384,7 +384,7 @@ exports.handler = async (event) => {
           url: "https://api.cohere.ai/v2/chat",
           headers: { Authorization: "Bearer " + COHERE_KEY },
           body: JSON.stringify({
-            model: env("COHERE_MODEL") || "command-r",
+            model: env("COHERE_MODEL") || "command-a-111b",
             messages: flat,
             temperature: 0.4,
             max_tokens: 1000,
