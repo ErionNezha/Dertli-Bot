@@ -70,11 +70,46 @@
     messagesEl.parentNode.insertBefore(note, messagesEl);
   }
 
-  // --- Përshëndetja fillestare ---
+  // --- Përshëndetja fillestare (typewriter — shkruhet shkronjë për shkronjë) ---
   function showWelcome() {
     messagesEl.innerHTML = "";
-    addMessage(CONFIG.WELCOME_MESSAGE, "bot");
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { addMessage(CONFIG.WELCOME_MESSAGE, "bot"); }
+    else { typeMessage(CONFIG.WELCOME_MESSAGE); }
     input.focus();
+  }
+
+  function typeMessage(text) {
+    botMsgSeq++;
+    var mid = "m" + Date.now() + "-" + botMsgSeq;
+    var wrap = document.createElement("div");
+    wrap.className = "message bot";
+    wrap.innerHTML = '<div class="avatar">' + botAvatarHTML() + '</div><div class="bubble-wrap"><div class="bubble">'
+      + '<span class="tw-text"></span><span class="tw-caret"></span></div><div class="msg-actions">'
+      + '<button type="button" class="msg-act fb-up" title="Më pëlqeu">👍</button>'
+      + '<button type="button" class="msg-act fb-down" title="Nuk më pëlqeu">👎</button>'
+      + "</div></div>";
+    messagesEl.appendChild(wrap);
+    wireMessageActions(wrap, mid);
+    var twText = wrap.querySelector(".tw-text");
+    var caret = wrap.querySelector(".tw-caret");
+    var chars = Array.from(String(text));
+    var i = 0, html = "";
+    function esc(c) {
+      return c.replace(/[&<>"']/g, function (m) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]; });
+    }
+    var timer = setInterval(function () {
+      if (i >= chars.length) {
+        clearInterval(timer);
+        if (caret && caret.parentNode) caret.parentNode.removeChild(caret);
+        scrollBottom();
+        return;
+      }
+      var c = chars[i++];
+      html += (c === "\n") ? "<br>" : esc(c);
+      twText.innerHTML = html;
+      scrollBottom();
+    }, 22);
   }
 
   // --- Vlerësimi 👍/👎 (ruhet vetëm lokalisht) ---
@@ -287,6 +322,27 @@
       chip.addEventListener("click", function () { send(s); });
       suggestionsEl.appendChild(chip);
     });
+
+    // --- Pluhur ari ambient (animim vetem transform/opacity — shume i lehte) ---
+    try {
+      var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!reduceMotion) {
+        var dust = document.createElement("div");
+        dust.className = "dust";
+        dust.setAttribute("aria-hidden", "true");
+        for (var di = 0; di < 12; di++) {
+          var sp = document.createElement("span");
+          sp.style.left = (Math.random() * 100).toFixed(2) + "%";
+          sp.style.animationDuration = (11 + Math.random() * 10).toFixed(2) + "s";
+          sp.style.animationDelay = (-Math.random() * 18).toFixed(2) + "s";
+          var sz = (2 + Math.random() * 3).toFixed(1);
+          sp.style.width = sz + "px";
+          sp.style.height = sz + "px";
+          dust.appendChild(sp);
+        }
+        document.body.appendChild(dust);
+      }
+    } catch (e) {}
   }
 
   init();
