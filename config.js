@@ -49,5 +49,5 @@ const CONFIG = {
   // Merret te Cloudflare Dashboard → Turnstile → Add site. Pa këtë çelës
   // (dhe TURNSTILE_SECRET në Netlify env vars), mbrojtja s'aktivizohet
   // dhe gjithçka punon si më parë.
-  TURNSTILE_SITEKEY: ""
+  TURNSTILE_SITEKEY: "0x4AAAAAAFK9rPJqsxFt1UkV"
 };
