@@ -9,9 +9,8 @@
 //    3. Gemini 1    FALLBACK_URL / FALLBACK_KEY / FALLBACK_MODEL (5s)
 //    4. Gemini 2    GEMINI_KEY_2 / GEMINI_MODEL_2              (5s)
 //    5. OpenRouter  OPENROUTER_KEY / OPENROUTER_MODEL          (5s)
-//    6. Mistral     MISTRAL_KEY / MISTRAL_MODEL                (5s)
-//    7. Cohere      COHERE_KEY / COHERE_MODEL                  (5s)
-//    8. Pollinations  (pa çelës) / POLLINATIONS_MODEL          (4s)
+//    6. Cohere      COHERE_KEY / COHERE_MODEL                  (5s)
+//    7. Pollinations  (pa çelës) / POLLINATIONS_MODEL          (4s)
 //
 //  LIGJ BLIND (urdhër i përdoruesit, 2026-09-30): boti nuk zbulon
 //  KURRË cili ofrues u përgjigj — sillet gjithmonë thjesht si
@@ -76,10 +75,24 @@ async function fetchWithTimeout(url, options, ms) {
   }
 }
 
-// Mbrojtje nga spam-i: max 30 kërkesa/orë për IP (mbron kuotat falas të ofruesve).
+// Mbrojtje me shkallë kundër abuzimit (mbron kuotat falas të ofruesve).
+// Identifikimi bëhet me IP (x-forwarded-for).
+//   Shkalla 1 — përdorim normal: max 30 kërkesa/orë për IP → 429 "pusho pak".
+//   Shkalla 2 — sjellje bot-i: >12 kërkesa në 2 minuta → LOCKDOWN 12 orë.
+//   Shkalla 3 — kokëfortë: 8+ refuzime 429 të injoruara brenda orës → LOCKDOWN 6 orë.
+// Mesazhi i lockdown-it është dygjuhësh (shqip/anglisht) me stil premium.
+// KUJDES: gjendja mbahet në memorien e instancës (serverless) — përafërt,
+// por e mjaftueshme: ndalon fort abuzimin nga një IP e vetme.
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const rateBuckets = new Map();
+const BURST_MAX = 12;
+const BURST_WINDOW_MS = 2 * 60 * 1000;
+const ABUSE_429_MAX = 8;
+const LOCKDOWN_MS = 6 * 60 * 60 * 1000;
+const LOCKDOWN_BURST_MS = 12 * 60 * 60 * 1000;
+const rateBuckets = new Map(); // ip -> [epoch ms të kërkesave]
+const abuseHits = new Map(); // ip -> [epoch ms të refuzimeve 429]
+const lockdowns = new Map(); // ip -> epoch ms kur mbaron pauza
 
 function clientIp(event) {
   const h = event.headers || {};
@@ -115,16 +128,51 @@ function originAllowed(event) {
   );
 }
 
-function isRateLimited(ip) {
+function checkAbuse(ip) {
   const now = Date.now();
-  let arr = rateBuckets.get(ip);
-  if (!arr) {
-    arr = [];
-    rateBuckets.set(ip, arr);
+  // 3) Lockdown aktiv? — ende në pauzë.
+  const until = lockdowns.get(ip) || 0;
+  if (until > now) return "lockdown";
+  if (until) lockdowns.delete(ip);
+
+  let reqs = rateBuckets.get(ip);
+  if (!reqs) {
+    reqs = [];
+    rateBuckets.set(ip, reqs);
   }
-  while (arr.length && now - arr[0] > RATE_LIMIT_WINDOW_MS) arr.shift();
-  if (arr.length >= RATE_LIMIT_MAX) return true;
-  arr.push(now);
+  while (reqs.length && now - reqs[0] > RATE_LIMIT_WINDOW_MS) reqs.shift();
+
+  // 2) Sjellje bot-i/skraperi: shumë kërkesa brenda 2 minutash → pauzë e gjatë menjëherë.
+  const burstCut = now - BURST_WINDOW_MS;
+  let burst = 0;
+  for (let i = reqs.length - 1; i >= 0 && reqs[i] >= burstCut; i--) burst++;
+  if (burst >= BURST_MAX) {
+    lockdowns.set(ip, now + LOCKDOWN_BURST_MS);
+    statsDay();
+    stats.lockdownImposed++;
+    return "lockdown";
+  }
+
+  // 1) Përdorim normal: max 30 kërkesa/orë.
+  if (reqs.length >= RATE_LIMIT_MAX) {
+    let hits = abuseHits.get(ip);
+    if (!hits) {
+      hits = [];
+      abuseHits.set(ip, hits);
+    }
+    while (hits.length && now - hits[0] > RATE_LIMIT_WINDOW_MS) hits.shift();
+    hits.push(now);
+    // Injoron paralajmërimet dhe vazhdon të godasë → lockdown.
+    if (hits.length >= ABUSE_429_MAX) {
+      lockdowns.set(ip, now + LOCKDOWN_MS);
+      statsDay();
+      stats.lockdownImposed++;
+      return "lockdown";
+    }
+    return "limited";
+  }
+
+  reqs.push(now);
   if (rateBuckets.size > 5000) {
     for (const [k, v] of rateBuckets) {
       if (!v.length || now - v[v.length - 1] > RATE_LIMIT_WINDOW_MS)
@@ -132,7 +180,51 @@ function isRateLimited(ip) {
       if (rateBuckets.size <= 4000) break;
     }
   }
-  return false;
+  return "ok";
+}
+
+// Numërues minimal i konsumit (përafërt — mbahet në memorien e instancës,
+// rullohet çdo ditë). Publikisht jepen VETËM totalet; detaji për hallkë
+// kërkon STATS_TOKEN (env var opsional) — mbron ligjin blind.
+const stats = {
+  day: "",
+  total: 0,
+  perLink: {},
+  rateLimited: 0,
+  lockdownImposed: 0,
+};
+function statsDay() {
+  const d = new Date().toISOString().slice(0, 10);
+  if (stats.day !== d) {
+    stats.day = d;
+    stats.total = 0;
+    stats.perLink = {};
+    stats.rateLimited = 0;
+    stats.lockdownImposed = 0;
+  }
+  return d;
+}
+function bumpReply(linkId) {
+  statsDay();
+  stats.total++;
+  stats.perLink[linkId] = (stats.perLink[linkId] || 0) + 1;
+}
+function handleStats(event) {
+  statsDay();
+  const pub = {
+    day: stats.day,
+    total: stats.total,
+    rateLimited: stats.rateLimited,
+    lockdownImposed: stats.lockdownImposed,
+  };
+  const token = String(process.env.STATS_TOKEN || "").trim();
+  const q = (event && event.queryStringParameters) || {};
+  if (token && String(q.token || "") === token) {
+    const full = { perLink: stats.perLink };
+    for (const k in pub) full[k] = pub[k];
+    return json(200, full);
+  }
+  return json(200, pub);
 }
 
 // Nxjerr tekstin nga përmbajtja e mesazhit (string ose pjesë teksti).
@@ -175,6 +267,9 @@ function parseCohere(data) {
 }
 
 exports.handler = async (event) => {
+  // Numëruesi publik i konsumit — pa kosto ofruesish, pa rate limit.
+  if (event.httpMethod === "GET") return handleStats(event);
+
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Vetëm kërkesa POST lejohet." });
   }
@@ -183,29 +278,33 @@ exports.handler = async (event) => {
     return json(403, { error: "Kërkesa nuk lejohet nga ky burim." });
   }
 
-  if (isRateLimited(clientIp(event))) {
+  const abuse = checkAbuse(clientIp(event));
+  if (abuse === "lockdown") {
+    statsDay();
+    stats.rateLimited++;
     return json(429, {
-      error:
+      error: "LOCKDOWN",
+      message:
+        "🛡️ Ke dërguar shumë mesazhe në një kohë të shkurtër. " +
+        "Për të mbrojtur shërbimin për të gjithë, qasja jote është vendosur përkohësisht në pauzë. " +
+        "Bëj pak pushim dhe provo përsëri pas disa orësh. ⏳\n\n" +
+        "🛡️ You've sent too many messages in a short time. " +
+        "To keep the service fair for everyone, your access has been temporarily paused. " +
+        "Take a break and try again in a few hours. ⏳",
+    });
+  }
+  if (abuse === "limited") {
+    statsDay();
+    stats.rateLimited++;
+    return json(429, {
+      error: "RATE_LIMITED",
+      message:
         "Ke dërguar shumë mesazhe në një kohë të shkurtër. " +
         "Pusho pak dhe provo përsëri pas disa minutash. ⏳",
     });
   }
 
   const env = (n) => (process.env[n] || "").trim();
-
-  const UPSTREAM_URL = env("UPSTREAM_URL");
-  const UPSTREAM_KEY = env("UPSTREAM_KEY");
-  const MODEL = env("MODEL") || "claude-opus-4.8";
-
-  if (!UPSTREAM_URL || !UPSTREAM_KEY) {
-    return json(500, {
-      error: "NOT_CONFIGURED",
-      message:
-        "Chatbot-i nuk është konfiguruar ende. Pronari i faqes duhet të vendosë " +
-        "UPSTREAM_URL dhe UPSTREAM_KEY te Netlify → Site settings → Environment variables, " +
-        "pastaj të bëjë një deploy të ri (Deploys → Trigger deploy).",
-    });
-  }
 
   let body = {};
   try {
@@ -240,6 +339,89 @@ exports.handler = async (event) => {
       }
       return { role: m.role, content: "" };
     });
+
+  // Komanda sekrete e pronarit: "/stats TOKEN" — statistikat e ditës brenda bisedës.
+  // Kërkon STATS_TOKEN të saktë; pa të kthehet përgjigje neutrale.
+  // S'digjet kuotë ofruesish dhe s'tregohen KURRË emra hallkash/ofruesish (ligji blind).
+  const lastUserText = (function () {
+    for (let i = safeMessages.length - 1; i >= 0; i--) {
+      if (safeMessages[i].role === "user") return textOf(safeMessages[i].content).trim();
+    }
+    return "";
+  })();
+  const statsCmd = lastUserText.match(/^\/stats(?:\s+(\S+))?\s*$/i);
+  if (statsCmd) {
+    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
+    if (ownerToken && statsCmd[1] && statsCmd[1] === ownerToken) {
+      statsDay();
+      return json(200, {
+        reply:
+          "📊 Statistikat e sotme (" +
+          stats.day +
+          "):\n" +
+          "• Mesazhe të shërbyera: " +
+          stats.total +
+          "\n" +
+          "• Kërkesa të bllokuara: " +
+          stats.rateLimited +
+          "\n" +
+          "• Lockdown-e të vendosura: " +
+          stats.lockdownImposed,
+      });
+    }
+    return json(200, { reply: "Nuk e njoha këtë komandë. 🤔" });
+  }
+
+  // Cloudflare Turnstile (opsional, i padukshëm): aktivizohet vetëm nëse
+  // TURNSTILE_SECRET është vendosur në env vars. Pa të, gjithçka si më parë.
+  const TURNSTILE_SECRET = env("TURNSTILE_SECRET");
+  if (TURNSTILE_SECRET) {
+    const cfToken = String(body.cfToken || "").trim();
+    let cfOk = false;
+    if (cfToken) {
+      try {
+        const vr = await fetchWithTimeout(
+          "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body:
+              "secret=" +
+              encodeURIComponent(TURNSTILE_SECRET) +
+              "&response=" +
+              encodeURIComponent(cfToken) +
+              "&remoteip=" +
+              encodeURIComponent(clientIp(event)),
+          },
+          8000
+        );
+        const vj = await vr.json().catch(() => null);
+        cfOk = !!(vj && vj.success);
+      } catch (e) {
+        cfOk = false;
+      }
+    }
+    if (!cfOk) {
+      return json(403, {
+        error:
+          "Verifikimi i sigurisë dështoi. Provo përsëri — nëse përdor adblock, çaktivizoje për këtë faqe. 🛡️",
+      });
+    }
+  }
+
+  const UPSTREAM_URL = env("UPSTREAM_URL");
+  const UPSTREAM_KEY = env("UPSTREAM_KEY");
+  const MODEL = env("MODEL") || "claude-opus-4.8";
+
+  if (!UPSTREAM_URL || !UPSTREAM_KEY) {
+    return json(500, {
+      error: "NOT_CONFIGURED",
+      message:
+        "Chatbot-i nuk është konfiguruar ende. Pronari i faqes duhet të vendosë " +
+        "UPSTREAM_URL dhe UPSTREAM_KEY te Netlify → Site settings → Environment variables, " +
+        "pastaj të bëjë një deploy të ri (Deploys → Trigger deploy).",
+    });
+  }
 
   // Mbrojtje anti-injection: rregulla sigurie të shtuara NGA SERVERI,
   // që klienti nuk mund t'i heqë apo anashkalojë.
@@ -381,22 +563,7 @@ exports.handler = async (event) => {
     });
   }
 
-  // 6. Mistral AI (free tier)
-  const MISTRAL_KEY = env("MISTRAL_KEY");
-  if (MISTRAL_KEY) {
-    providers.push({
-      id: "mistral",
-      timeout: PROVIDER_TIMEOUT_MS,
-      req: () => ({
-        url: "https://api.mistral.ai/v1/chat/completions",
-        headers: { Authorization: "Bearer " + MISTRAL_KEY },
-        body: openAIBody(env("MISTRAL_MODEL") || "mistral-small-latest"),
-      }),
-      parse: parseOpenAI,
-    });
-  }
-
-  // 7. Cohere (trial key falas)
+  // 6. Cohere (trial key falas)
   const COHERE_KEY = env("COHERE_KEY");
   if (COHERE_KEY) {
     providers.push({
@@ -432,7 +599,7 @@ exports.handler = async (event) => {
     });
   }
 
-  // 8. Pollinations.ai (rrjeta e fundit e sigurisë — pa çelës, falas)
+  // 7. Pollinations.ai (rrjeta e fundit e sigurisë — pa çelës, falas)
   providers.push({
     id: "pollinations",
     timeout: LAST_TIMEOUT_MS,
@@ -475,7 +642,10 @@ exports.handler = async (event) => {
         continue;
       }
       const reply = p.parse(data);
-      if (reply) return json(200, { reply: reply });
+      if (reply) {
+        bumpReply(p.id);
+        return json(200, { reply: reply });
+      }
       console.error("[chat] " + p.id + ": pa përmbajtje përgjigjeje");
     } catch (e) {
       // Timeout, rrjet, abort — kalo heshturazi te hallka tjetër.
