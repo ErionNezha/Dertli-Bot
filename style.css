@@ -239,3 +239,17 @@ body{
   .bot-avatar,.dust span,.tw-caret{animation:none}
   .dust{display:none}
 }
+
+/* ---------- Pyetjet pasuese (chip-a nën përgjigje) ---------- */
+.followups{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip-sm{font-size:12px;padding:6px 12px;opacity:.92}
+/* ---------- Banner-i i njoftimit ---------- */
+.banner{display:flex;align-items:center;gap:10px;padding:10px 14px;flex-shrink:0;
+  background:linear-gradient(135deg,rgba(212,175,55,.16),rgba(212,175,55,.05));
+  border-bottom:1px solid rgba(212,175,55,.35);font-size:13px;color:var(--text);
+  animation:fadeUp .3s cubic-bezier(.2,.9,.3,1) both}
+.banner-text{flex:1;line-height:1.45}
+.banner-x{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:50%;
+  width:26px;height:26px;cursor:pointer;flex-shrink:0;font-size:12px;line-height:1;
+  display:flex;align-items:center;justify-content:center}
+.banner-x:hover{color:var(--gold-bright);border-color:rgba(212,175,55,.6)}
