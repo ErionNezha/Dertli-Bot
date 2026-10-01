@@ -49,5 +49,33 @@ const CONFIG = {
   // Merret te Cloudflare Dashboard → Turnstile → Add site. Pa këtë çelës
   // (dhe TURNSTILE_SECRET në Netlify env vars), mbrojtja s'aktivizohet
   // dhe gjithçka punon si më parë.
-  TURNSTILE_SITEKEY: "0x4AAAAAAFK9rPJqsxFt1UkV"
+  TURNSTILE_SITEKEY: "0x4AAAAAAFK9rPJqsxFt1UkV",
+
+
+  // Pyetje pasuese inteligjente: pas çdo përgjigjeje shfaqen chip-a me
+  // pyetjet që logjikisht vijnë më pas. Çelësi = "topic" që kthen serveri.
+  FOLLOWUPS: {
+    iptv: ["A ka provë falas?", "Kontakti", "Si paguaj?"],
+    erioni: ["Projektet e tij", "Aftësitë teknike", "Kontakti"],
+    projektet: ["Kush është Erioni?", "Aftësitë teknike", "📺 Çmimet IPTV"],
+    aftesite: ["Projektet e tij", "Kush është Erioni?", "Kontakti"],
+    kontakti: ["📺 Çmimet IPTV", "Projektet e tij", "Kush është Erioni?"],
+    identiteti: ["Kush të krijoi?", "Kush është Erioni?", "Çfarë di të bësh?"],
+    krijuesi: ["Kush është Erioni?", "Projektet e tij", "Kontakti"],
+    faleminderit: ["📺 Çmimet IPTV", "Kush është Erioni?", "Projektet e tij"],
+    pershendetje: ["Kush je ti?", "Kush është Erioni?", "📺 Çmimet IPTV"],
+    _generic: ["Kush është Erioni?", "📺 Çmimet IPTV", "Kontakti"]
+  },
+  FOLLOWUPS_EN: {
+    iptv: ["Is there a free trial?", "Contact", "How do I pay?"],
+    erioni: ["His projects", "Technical skills", "Contact"],
+    projektet: ["Who is Erion?", "Technical skills", "📺 IPTV prices"],
+    aftesite: ["His projects", "Who is Erion?", "Contact"],
+    kontakti: ["📺 IPTV prices", "His projects", "Who is Erion?"],
+    identiteti: ["Who created you?", "Who is Erion?", "What can you do?"],
+    krijuesi: ["Who is Erion?", "His projects", "Contact"],
+    faleminderit: ["📺 IPTV prices", "Who is Erion?", "His projects"],
+    pershendetje: ["Who are you?", "Who is Erion?", "📺 IPTV prices"],
+    _generic: ["Who is Erion?", "📺 IPTV prices", "Contact"]
+  }
 };
