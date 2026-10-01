@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- Created by Erion Nezha — © 2026 All rights reserved -->
 <!-- FAQE PRIVATE E PRONARIT — nuk është e linkuar askund në faqe.
-     Hyrja kërkon STATS_TOKEN. Mos e ndaj URL-në. -->
+     Hyrja kërkon STATS_TOKEN (dërgohet me header, jo në URL). Mos e ndaj URL-në. -->
 <html lang="sq">
 <head>
 <meta charset="UTF-8">
@@ -14,8 +14,8 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;min-height:100vh;color:var(--text);
 background:radial-gradient(1200px 800px at 50% -10%,#151517 0%,var(--bg) 55%),var(--bg);
-display:flex;align-items:center;justify-content:center;padding:20px 16px;-webkit-font-smoothing:antialiased}
-.card{width:100%;max-width:520px;background:var(--panel);border:1px solid rgba(212,175,55,.25);border-radius:24px;
+display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;-webkit-font-smoothing:antialiased}
+.card{width:100%;max-width:640px;background:var(--panel);border:1px solid rgba(212,175,55,.25);border-radius:24px;
 padding:32px 28px;box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 60px rgba(212,175,55,.07)}
 h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--gold-bright)}
 .sub{color:var(--muted);font-size:12.5px;margin-bottom:20px}
@@ -26,17 +26,37 @@ color:var(--text);padding:10px 12px;font-size:14px;outline:none}
 .lock button{background:linear-gradient(135deg,#d4af37,#b8941f);border:none;border-radius:10px;
 padding:10px 18px;font-weight:700;cursor:pointer;color:#141005;font-size:14px}
 .err{color:#f87171;font-size:13px;margin-bottom:14px;display:none}
-.grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:22px}
 .cell{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:14px 6px;text-align:center}
 .cell b{display:block;font-size:22px;color:var(--gold-bright);margin-bottom:4px}
 .cell span{font-size:11.5px;color:var(--muted)}
-h2{font-size:14px;color:var(--muted);font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em}
+h2{font-size:13px;color:var(--muted);font-weight:600;margin:22px 0 12px;text-transform:uppercase;letter-spacing:.06em}
 .bar-row{margin-bottom:10px}
 .bar-row .lbl{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
 .bar-row .lbl b{color:var(--gold-bright)}
 .bar{height:8px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,#b8941f,var(--gold-bright));border-radius:99px;min-width:2px}
-.foot{font-size:11.5px;color:var(--muted);margin-top:18px;line-height:1.6;text-align:center}
+.sat{display:flex;align-items:center;gap:12px;font-size:14px;margin-bottom:6px}
+.sat .bar{flex:1}
+.sat b{color:var(--gold-bright)}
+.hbar24{display:flex;align-items:flex-end;gap:3px;height:64px}
+.hbar24 div{flex:1;background:linear-gradient(180deg,#f2d879,#b8941f);border-radius:3px 3px 0 0;min-height:2px;opacity:.9}
+.hbar24-lbls{display:flex;gap:3px;font-size:9px;color:var(--muted);margin-top:4px}
+.hbar24-lbls span{flex:1;text-align:center}
+.cand-row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:9px 12px;
+background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;line-height:1.45}
+.cand-row b{color:var(--gold-bright);flex-shrink:0}
+.cand-note{font-size:12px;color:var(--muted);margin:10px 0 4px;line-height:1.6}
+.banner-now{font-size:13px;background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.35);
+border-radius:10px;padding:10px 12px;margin-bottom:10px;line-height:1.5}
+textarea{width:100%;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;
+color:var(--text);padding:10px 12px;font-size:14px;outline:none;font-family:inherit;resize:vertical;min-height:60px}
+textarea:focus{border-color:rgba(212,175,55,.6)}
+.btnrow{display:flex;gap:8px;margin-top:10px}
+.btnrow button{background:linear-gradient(135deg,#d4af37,#b8941f);border:none;border-radius:10px;
+padding:10px 18px;font-weight:700;cursor:pointer;color:#141005;font-size:14px}
+.btnrow button.ghost{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:500}
+.foot{font-size:11.5px;color:var(--muted);margin-top:20px;line-height:1.6;text-align:center}
 .hidden{display:none}
 </style>
 </head>
@@ -58,17 +78,68 @@ h2{font-size:14px;color:var(--muted);font-weight:600;margin-bottom:12px;text-tra
       <div class="cell"><b id="d-lock">–</b><span>Lockdown-e</span></div>
       <div class="cell"><b id="d-faq">–</b><span>Të shpejta ⚡</span></div>
     </div>
+
+    <h2>Kënaqësia e vizitorëve</h2>
+    <div class="sat">
+      <span>👍 <b id="d-up">–</b></span>
+      <div class="bar"><i id="d-satbar" style="width:0%"></i></div>
+      <span>👎 <b id="d-down">–</b></span>
+    </div>
+
     <h2>Shpërndarja për hallkë</h2>
     <div id="bars"></div>
+
+    <h2>Temat e pyetura ⚡</h2>
+    <div id="topics"></div>
+
+    <h2>Aktiviteti sipas orës</h2>
+    <div class="hbar24" id="hours"></div>
+    <div class="hbar24-lbls" id="hours-lbl"></div>
+
+    <h2>Kandidatë për përgjigje të shpejta</h2>
+    <div id="cand"></div>
+    <div class="cand-note">Pyetjet që vizitorët bëjnë më shpesh (dhe s'janë ende "të çastit").
+    Shtoja në kod si hyrje FAQ — bëhen përgjigje çast me zero kuotë.</div>
+
+    <h2>📢 Banner njoftimi</h2>
+    <div class="banner-now" id="banner-now">(asnjë banner aktiv)</div>
+    <textarea id="banner-text" maxlength="200" placeholder="Shkruaj njoftimin për vizitorët…"></textarea>
+    <div class="btnrow">
+      <button id="banner-set" type="button">Publiko</button>
+      <button id="banner-clear" type="button" class="ghost">Hiq</button>
+    </div>
+
     <div class="foot">Përditësuar: <span id="d-time">–</span> · rifreskohet automatikisht çdo 60s<br>
     Kjo faqe nuk është e linkuar askund — mos e ndaj URL-në.</div>
   </div>
 </div>
 <script>
 var token = sessionStorage.getItem("dertli_stats_token") || "";
+var TOPIC_LABELS = {iptv:"📺 Çmimet IPTV",erioni:"Kush është Erioni",projektet:"Projektet",
+  aftesite:"Aftësitë teknike",kontakti:"Kontakti",identiteti:"Kush je ti",
+  krijuesi:"Kush të krijoi",faleminderit:"Faleminderit",pershendetje:"Përshëndetje"};
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
 function fetchStats(){
-  return fetch("/.netlify/functions/chat?stats=1&token=" + encodeURIComponent(token))
+  return fetch("/.netlify/functions/chat?stats=1", { headers: { "X-Stats-Token": token } })
     .then(function(r){ if(!r.ok) throw new Error("http"); return r.json(); });
+}
+function barsInto(el, entries, fmt){
+  el.innerHTML = "";
+  entries.sort(function(a,b){ return b[1]-a[1]; });
+  var max = entries.length ? entries[0][1] : 1;
+  if(!entries.length){ el.innerHTML = '<div class="foot">Asnjë e dhënë sot.</div>'; return; }
+  entries.forEach(function(e){
+    var row = document.createElement("div");
+    row.className = "bar-row";
+    var pct = Math.max(2, Math.round(e[1]/max*100));
+    row.innerHTML = '<div class="lbl"><span>' + esc(fmt ? fmt(e[0]) : e[0]) + '</span><b>' + e[1] + '</b></div>' +
+      '<div class="bar"><i style="width:' + pct + '%"></i></div>';
+    el.appendChild(row);
+  });
 }
 function render(s){
   if(!s || !s.perLink){ throw new Error("token"); }
@@ -79,21 +150,58 @@ function render(s){
   document.getElementById("d-blocked").textContent = s.rateLimited;
   document.getElementById("d-lock").textContent = s.lockdownImposed;
   document.getElementById("d-faq").textContent = (typeof s.faqHits === "number") ? s.faqHits : "–";
-  var bars = document.getElementById("bars");
-  bars.innerHTML = "";
-  var entries = Object.keys(s.perLink).map(function(k){ return [k, s.perLink[k]]; });
-  entries.sort(function(a,b){ return b[1]-a[1]; });
-  var max = entries.length ? entries[0][1] : 1;
-  if(!entries.length){ bars.innerHTML = '<div class="foot">Asnjë mesazh i shërbyer sot.</div>'; }
-  entries.forEach(function(e){
+  // Kënaqësia
+  var up = (s.ratings && s.ratings.up) || 0, down = (s.ratings && s.ratings.down) || 0;
+  document.getElementById("d-up").textContent = up;
+  document.getElementById("d-down").textContent = down;
+  var pct = (up + down) ? Math.round(up/(up+down)*100) : 0;
+  document.getElementById("d-satbar").style.width = pct + "%";
+  // Hallkat
+  barsInto(document.getElementById("bars"),
+    Object.keys(s.perLink).map(function(k){ return [k, s.perLink[k]]; }));
+  // Temat
+  barsInto(document.getElementById("topics"),
+    Object.keys(s.faqTopics || {}).map(function(k){ return [k, s.faqTopics[k]]; }),
+    function(k){ return TOPIC_LABELS[k] || k; });
+  // Orët
+  var hb = document.getElementById("hours"), hl = document.getElementById("hours-lbl");
+  hb.innerHTML = ""; hl.innerHTML = "";
+  var hmax = 1, hv = [];
+  for(var h = 0; h < 24; h++){
+    var v = (s.hourly && s.hourly[String(h)]) || 0;
+    hv.push(v); if(v > hmax) hmax = v;
+  }
+  for(var h2 = 0; h2 < 24; h2++){
+    var d = document.createElement("div");
+    d.style.height = Math.max(3, Math.round(hv[h2]/hmax*100)) + "%";
+    d.title = h2 + ":00 — " + hv[h2];
+    hb.appendChild(d);
+    var l = document.createElement("span");
+    l.textContent = (h2 % 3 === 0) ? h2 : "";
+    hl.appendChild(l);
+  }
+  // Kandidatët
+  var ce = document.getElementById("cand");
+  ce.innerHTML = "";
+  var cand = s.candidates || [];
+  if(!cand.length){ ce.innerHTML = '<div class="foot">Ende asnjë kandidat sot.</div>'; }
+  cand.slice(0, 10).forEach(function(c){
     var row = document.createElement("div");
-    row.className = "bar-row";
-    var pct = Math.max(2, Math.round(e[1]/max*100));
-    row.innerHTML = '<div class="lbl"><span>' + e[0] + '</span><b>' + e[1] + '</b></div>' +
-      '<div class="bar"><i style="width:' + pct + '%"></i></div>';
-    bars.appendChild(row);
+    row.className = "cand-row";
+    row.innerHTML = "<span>" + esc(c[0]) + "</span><b>×" + c[1] + "</b>";
+    ce.appendChild(row);
   });
+  // Banner
+  document.getElementById("banner-now").textContent =
+    s.banner ? "Aktiv: " + s.banner : "(asnjë banner aktiv)";
   document.getElementById("d-time").textContent = new Date().toLocaleTimeString("sq-AL");
+}
+function setBanner(text){
+  return fetch("/.netlify/functions/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "set_banner", token: token, text: text })
+  }).then(function(r){ return r.json(); });
 }
 document.getElementById("go").addEventListener("click", function(){
   token = document.getElementById("token").value.trim();
@@ -107,6 +215,17 @@ document.getElementById("go").addEventListener("click", function(){
 document.getElementById("token").addEventListener("keydown", function(e){
   if(e.key === "Enter"){ document.getElementById("go").click(); }
 });
+document.getElementById("banner-set").addEventListener("click", function(){
+  var t = document.getElementById("banner-text").value.trim();
+  if(!t) return;
+  setBanner(t).then(function(){ document.getElementById("banner-text").value = ""; refresh(); });
+});
+document.getElementById("banner-clear").addEventListener("click", function(){
+  setBanner("").then(refresh);
+});
+function refresh(){
+  if(token) fetchStats().then(render).catch(function(){});
+}
 if(token){
   document.getElementById("token").value = token;
   fetchStats().then(render).catch(function(){
@@ -114,7 +233,7 @@ if(token){
     token = "";
   });
 }
-setInterval(function(){ if(token) fetchStats().then(render).catch(function(){}); }, 60000);
+setInterval(refresh, 60000);
 </script>
 </body>
 </html>
