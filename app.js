@@ -43,7 +43,7 @@
     return html;
   }
 
-  function addMessage(text, who, cls) {
+  function addMessage(text, who, cls, topic, lang) {
     var wrap = document.createElement("div");
     wrap.className = "message " + who + (cls ? " " + cls : "");
     if (who === "bot") {
@@ -54,6 +54,7 @@
         + '<button type="button" class="msg-act fb-down" title="Nuk më pëlqeu">👎</button>'
         + "</div></div>";
       wireMessageActions(wrap, mid);
+      if (topic) addFollowups(wrap, topic, lang);
     } else {
       wrap.innerHTML = '<div class="bubble">' + formatText(text) + "</div>";
     }
@@ -124,6 +125,17 @@
       feedbackStore[mid] = (feedbackStore[mid] === v) ? "" : v;
       try { localStorage.setItem("dertli-feedback", JSON.stringify(feedbackStore)); } catch (e) {}
       paint();
+      // Numërohet edhe në server (për analitikën e pronarit) — pa kuotë, pa Turnstile.
+      var nv = feedbackStore[mid];
+      if (nv === "up" || nv === "down") {
+        try {
+          fetch(ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "rate", value: nv })
+          }).catch(function () {});
+        } catch (e) {}
+      }
     }
     if (up) up.addEventListener("click", function () { vote("up"); });
     if (down) down.addEventListener("click", function () { vote("down"); });
@@ -195,6 +207,60 @@
         });
       } catch (e) { resolve(""); }
     });
+  }
+
+  // --- Pyetje pasuese inteligjente (chip-a nën çdo përgjigje) ---
+  function addFollowups(wrap, topic, lang) {
+    try {
+      var map = (lang === "en" && CONFIG.FOLLOWUPS_EN) ? CONFIG.FOLLOWUPS_EN : CONFIG.FOLLOWUPS;
+      if (!map) return;
+      var list = map[topic] || map._generic;
+      if (!list || !list.length) return;
+      var holder = wrap.querySelector(".bubble-wrap") || wrap;
+      var row = document.createElement("div");
+      row.className = "followups";
+      list.forEach(function (q) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip chip-sm";
+        b.textContent = q;
+        b.addEventListener("click", function () { send(q); });
+        row.appendChild(b);
+      });
+      holder.appendChild(row);
+      scrollBottom();
+    } catch (e) {}
+  }
+
+  // --- Banner-i i njoftimit të pronarit (hiqet lehtë, mbahet mend për sesionin) ---
+  function loadBanner() {
+    try {
+      fetch(ENDPOINT + "?banner=1").then(function (r) {
+        return r.ok ? r.json() : null;
+      }).then(function (d) {
+        var t = d && String(d.banner || "").trim();
+        if (!t) return;
+        try { if (sessionStorage.getItem("dertli-banner-off")) return; } catch (e) {}
+        var bar = document.createElement("div");
+        bar.className = "banner";
+        var txt = document.createElement("span");
+        txt.className = "banner-text";
+        txt.textContent = t;
+        var x = document.createElement("button");
+        x.type = "button";
+        x.className = "banner-x";
+        x.setAttribute("aria-label", "Mbyll");
+        x.textContent = "✕";
+        x.addEventListener("click", function () {
+          bar.remove();
+          try { sessionStorage.setItem("dertli-banner-off", "1"); } catch (e) {}
+        });
+        bar.appendChild(txt);
+        bar.appendChild(x);
+        var shell = document.querySelector(".chat-shell");
+        if (shell) shell.insertBefore(bar, shell.firstChild);
+      }).catch(function () {});
+    } catch (e) {}
   }
 
   // --- Numëruesi publik "sot" (pa kosto, pa të dhëna sensitive) ---
@@ -277,7 +343,7 @@
         var reply = String(out.data.reply || "").trim();
         if (!reply) throw new Error("Nuk u mor përgjigje.");
         history.push({ role: "assistant", content: reply });
-        addMessage(reply, "bot");
+        addMessage(reply, "bot", "", out.data.topic || null, out.data.lang || "sq");
       })
       .catch(function (err) {
         if (err.message === "STATIC_DEMO" || err instanceof TypeError) {
@@ -377,6 +443,7 @@
     showWelcome();
     turnstileReady();
     loadTodayCount();
+    loadBanner();
 
     (CONFIG.SUGGESTIONS || []).forEach(function (s) {
       var chip = document.createElement("button");
