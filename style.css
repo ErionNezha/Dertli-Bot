@@ -263,13 +263,23 @@ html[data-theme="light"]{
   --text:#1c1a14;
   --muted:#6b675c;
   --line:rgba(0,0,0,.1);
+  --gold-bright:#8a6d1a; /* ari i errët — i lexueshëm mbi të bardhë */
 }
 html[data-theme="light"] body{
   background:radial-gradient(1200px 800px at 50% -10%, #ffffff 0%, var(--bg) 55%), var(--bg);
 }
 html[data-theme="light"] .chat-shell{background:rgba(255,255,255,.7)}
 html[data-theme="light"] .bubble{background:#fff;border-color:var(--line)}
+html[data-theme="light"] .bubble strong{color:inherit} /* ishte #fff — i padukshëm mbi të bardhë */
 html[data-theme="light"] .message.user .bubble{background:linear-gradient(135deg,var(--gold-bright),var(--gold));color:#1a1405}
+html[data-theme="light"] .bot-name{ /* gradient ari i errët për sfond të çelur */
+  background:linear-gradient(110deg,#8a6d1a 20%,#c39a2b 38%,#d4af37 50%,#c39a2b 62%,#8a6d1a 80%);
+  background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;
+}
+html[data-theme="light"] .chat-input input{background:#fff}
+html[data-theme="light"] .chat-input input::placeholder{color:#8a877e}
+html[data-theme="light"] .chat-messages{scrollbar-color:#c9c4b4 transparent}
+html[data-theme="light"] .chat-messages::-webkit-scrollbar-thumb{background:#c9c4b4}
 
 /* Chip ari + pyetja e ditës */
 .chip-gold{
