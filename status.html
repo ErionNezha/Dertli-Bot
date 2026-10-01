@@ -26,7 +26,7 @@ padding:12px 22px;border-radius:999px;border:1px solid var(--line);margin-bottom
 .status.bad{border-color:rgba(248,113,113,.4);color:#f87171}
 .status.bad .dot{background:#f87171;box-shadow:0 0 12px #f87171}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:18px}
 .cell{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:14px 6px}
 .cell b{display:block;font-size:22px;color:var(--gold-bright);margin-bottom:4px}
 .cell span{font-size:11.5px;color:var(--muted)}
@@ -46,6 +46,7 @@ padding:12px 22px;border-radius:999px;border:1px solid var(--line);margin-bottom
     <div class="cell"><b id="st-total">–</b><span>Mesazhe sot</span></div>
     <div class="cell"><b id="st-blocked">–</b><span>Të bllokuara</span></div>
     <div class="cell"><b id="st-lock">–</b><span>Lockdown-e</span></div>
+    <div class="cell"><b id="st-faq">–</b><span>Të shpejta</span></div>
   </div>
   <div id="st-time" class="time"></div>
   <a class="back" href="/">← Kthehu te biseda · Back to chat</a>
@@ -66,6 +67,7 @@ function refresh(){
     document.getElementById("st-total").textContent = (s && typeof s.total === "number") ? s.total : "–";
     document.getElementById("st-blocked").textContent = (s && typeof s.rateLimited === "number") ? s.rateLimited : "–";
     document.getElementById("st-lock").textContent = (s && typeof s.lockdownImposed === "number") ? s.lockdownImposed : "–";
+    document.getElementById("st-faq").textContent = (s && typeof s.faqHits === "number") ? s.faqHits : "–";
     document.getElementById("st-time").textContent = "Përditësuar: " + new Date().toLocaleTimeString("sq-AL") + " · " + new Date().toLocaleDateString("sq-AL");
   }).catch(function(){
     setStatus(false, "Probleme me shërbimin");
