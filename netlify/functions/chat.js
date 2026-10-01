@@ -5,8 +5,8 @@
 //
 //  ZINXHIRI (provohen me radhë, ndalet te e para që përgjigjet):
 //    1. CodeCraft   UPSTREAM_URL / UPSTREAM_KEY / MODEL        (10s — LIGJ)
-//    2. Groq        GROQ_KEY / GROQ_MODEL                      (5s)
-//    3. Gemini 1    FALLBACK_URL / FALLBACK_KEY / FALLBACK_MODEL (5s)
+//    2. Gemini 1    FALLBACK_URL / FALLBACK_KEY / FALLBACK_MODEL (5s — LIGJ: direkt pas CodeCraft)
+//    3. Groq        GROQ_KEY / GROQ_MODEL                      (5s)
 //    4. Gemini 2    GEMINI_KEY_2 / GEMINI_MODEL_2              (5s)
 //    5. OpenRouter  OPENROUTER_KEY / OPENROUTER_MODEL          (5s)
 //    6. Cohere      COHERE_KEY / COHERE_MODEL                  (5s)
@@ -491,22 +491,7 @@ exports.handler = async (event) => {
     parse: parseOpenAI,
   });
 
-  // 2. Groq (falas, i shpejtë)
-  const GROQ_KEY = env("GROQ_KEY");
-  if (GROQ_KEY) {
-    providers.push({
-      id: "groq",
-      timeout: PROVIDER_TIMEOUT_MS,
-      req: () => ({
-        url: "https://api.groq.com/openai/v1/chat/completions",
-        headers: { Authorization: "Bearer " + GROQ_KEY },
-        body: openAIBody(env("GROQ_MODEL") || "llama-3.3-70b-versatile"),
-      }),
-      parse: parseOpenAI,
-    });
-  }
-
-  // 3. Gemini — çelësi 1 (rezerva ekzistuese)
+  // 2. Gemini — çelësi 1 (rezerva ekzistuese, LIGJ: direkt pas CodeCraft)
   const FALLBACK_URL =
     env("FALLBACK_URL") ||
     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
@@ -522,6 +507,21 @@ exports.handler = async (event) => {
         url: FALLBACK_URL,
         headers: fbHeaders,
         body: openAIBody(FALLBACK_MODEL),
+      }),
+      parse: parseOpenAI,
+    });
+  }
+
+  // 3. Groq (falas, i shpejtë)
+  const GROQ_KEY = env("GROQ_KEY");
+  if (GROQ_KEY) {
+    providers.push({
+      id: "groq",
+      timeout: PROVIDER_TIMEOUT_MS,
+      req: () => ({
+        url: "https://api.groq.com/openai/v1/chat/completions",
+        headers: { Authorization: "Bearer " + GROQ_KEY },
+        body: openAIBody(env("GROQ_MODEL") || "llama-3.3-70b-versatile"),
       }),
       parse: parseOpenAI,
     });
