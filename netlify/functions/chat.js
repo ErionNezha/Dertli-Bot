@@ -193,6 +193,11 @@ const stats = {
   rateLimited: 0,
   lockdownImposed: 0,
   faqHits: 0,
+  faqTopics: {},   // topicId -> përgjigje të shpejta për temë
+  hourly: {},       // "0".."23" -> kërkesa në atë orë
+  ratings: { up: 0, down: 0 },  // 👍/👎 nga vizitorët
+  candidates: {},   // pyetje reale jo-FAQ (të normalizuara) -> sa herë u bënë
+  banner: "",       // njoftimi i pronarit për të gjithë vizitorët
 };
 function statsDay() {
   const d = new Date().toISOString().slice(0, 10);
@@ -203,13 +208,24 @@ function statsDay() {
     stats.rateLimited = 0;
     stats.lockdownImposed = 0;
     stats.faqHits = 0;
+    stats.faqTopics = {};
+    stats.hourly = {};
+    stats.ratings = { up: 0, down: 0 };
+    stats.candidates = {};
+    stats.banner = "";
   }
   return d;
 }
 function bumpReply(linkId) {
   statsDay();
   stats.total++;
+  noteHour();
   stats.perLink[linkId] = (stats.perLink[linkId] || 0) + 1;
+}
+function noteHour() {
+  statsDay();
+  const h = String(new Date().getHours());
+  stats.hourly[h] = (stats.hourly[h] || 0) + 1;
 }
 function handleStats(event) {
   statsDay();
@@ -219,11 +235,27 @@ function handleStats(event) {
     rateLimited: stats.rateLimited,
     lockdownImposed: stats.lockdownImposed,
     faqHits: stats.faqHits,
+    ratings: { up: stats.ratings.up, down: stats.ratings.down },
   };
   const token = String(process.env.STATS_TOKEN || "").trim();
   const q = (event && event.queryStringParameters) || {};
-  if (token && String(q.token || "") === token) {
-    const full = { perLink: stats.perLink };
+  const h = (event && event.headers) || {};
+  // Tokeni pranohet me header (mënyra e re, e sigurt) ose query string (e vjetra).
+  const given = String(
+    q.token || h["x-stats-token"] || h["X-Stats-Token"] || ""
+  );
+  if (token && given === token) {
+    const cand = Object.keys(stats.candidates)
+      .map(function (k) { return [k, stats.candidates[k]]; })
+      .sort(function (a, b) { return b[1] - a[1]; })
+      .slice(0, 20);
+    const full = {
+      perLink: stats.perLink,
+      faqTopics: stats.faqTopics,
+      hourly: stats.hourly,
+      candidates: cand,
+      banner: stats.banner,
+    };
     for (const k in pub) full[k] = pub[k];
     return json(200, full);
   }
@@ -310,6 +342,8 @@ const FAQ = [
     re: "Hello! 👋 How can I help?",
   },
 ];
+["iptv","erioni","projektet","aftesite","kontakti","identiteti","krijuesi","faleminderit","pershendetje"]
+  .forEach(function (id, i) { FAQ[i].id = id; });
 function matchFaq(text) {
   const n = faqNorm(text);
   if (!n) return null;
@@ -317,9 +351,36 @@ function matchFaq(text) {
     for (const p of list) if (n === p || n.indexOf(p + " ") === 0) return true;
     return false;
   };
-  for (const e of FAQ) if (hit(e.ps)) return e.rs;
-  for (const e of FAQ) if (hit(e.pe || [])) return e.re || e.rs;
+  for (const e of FAQ) if (hit(e.ps)) return { e: e, lang: "sq" };
+  for (const e of FAQ) if (hit(e.pe || [])) return { e: e, lang: "en" };
   return null;
+}
+// Zbulon temën e pyetjes për pyetjet pasuese (edhe kur përgjigjet AI).
+function detectTopic(text) {
+  const n = faqNorm(text);
+  if (!n) return null;
+  const has = function () {
+    for (let i = 0; i < arguments.length; i++)
+      if (n.indexOf(arguments[i]) !== -1) return true;
+    return false;
+  };
+  if (has("iptv", "cmim", "paket", "abonim", "price")) return "iptv";
+  if (has("krijues", "krijoi", "made you", "created you", "erionxx")) return "krijuesi";
+  if (has("projekt", "projects")) return "projektet";
+  if (has("aftesi", "teknologji", "teknologj", "stack", "skills")) return "aftesite";
+  if (has("kontakt", "contact", "email", "telefoni", "numri", "whatsapp")) return "kontakti";
+  if (has("kush je", "who are you", "cfare je")) return "identiteti";
+  if (has("faleminderit", "thanks", "thank you", "flm")) return "faleminderit";
+  if (has("pershendetje", "hello", "tung")) return "pershendetje";
+  if (has("erion")) return "erioni";
+  return null;
+}
+// Gjuha e pyetjes (për chip-at pasues) — heuristikë e thjeshtë.
+function detectLang(text) {
+  const n = " " + faqNorm(text) + " ";
+  if (/\b(what|how|who|whom|when|where|why|your|yours|are|the|can|could|does|did|will|would|please|hello|hey|thanks|thank|you|with|for|this|that|have|has)\b/.test(n))
+    return "en";
+  return "sq";
 }
 
 // Parser standard për API-të e formatit OpenAI:
@@ -352,8 +413,15 @@ function parseCohere(data) {
 }
 
 exports.handler = async (event) => {
-  // Numëruesi publik i konsumit — pa kosto ofruesish, pa rate limit.
-  if (event.httpMethod === "GET") return handleStats(event);
+  // GET: statistika publike — ose banner-i i njoftimit (pa kosto, pa rate limit).
+  if (event.httpMethod === "GET") {
+    const q = (event && event.queryStringParameters) || {};
+    if (q && q.banner !== undefined) {
+      statsDay();
+      return json(200, { banner: stats.banner || "" });
+    }
+    return handleStats(event);
+  }
 
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Vetëm kërkesa POST lejohet." });
@@ -454,19 +522,51 @@ exports.handler = async (event) => {
           stats.lockdownImposed +
           "\n" +
           "• Përgjigje të shpejta (pa kuotë): " +
-          stats.faqHits,
+          stats.faqHits +
+          "\n• Vlerësime: 👍 " +
+          stats.ratings.up +
+          " · 👎 " +
+          stats.ratings.down,
       });
     }
     return json(200, { reply: "Nuk e njoha këtë komandë. 🤔" });
   }
 
+  // Vlerësimi 👍/👎 nga vizitori: numërohet, s'djeg kuotë, s'do Turnstile.
+  if (body.action === "rate") {
+    const v = String(body.value || "");
+    if (v === "up" || v === "down") {
+      statsDay();
+      stats.ratings[v]++;
+      return json(200, { ok: true });
+    }
+    return json(400, { error: "Vlerë e pavlefshme." });
+  }
+
+  // Banner-i i njoftimit: vetëm pronari me STATS_TOKEN.
+  if (body.action === "set_banner") {
+    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
+    if (!ownerToken || String(body.token || "") !== ownerToken) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    statsDay();
+    stats.banner = String(body.text || "").slice(0, 200);
+    return json(200, { ok: true, banner: stats.banner });
+  }
+
   // Pyetjet e shpeshta: përgjigje çast pa djegur kuotë.
-  const faqReply = matchFaq(lastUserText);
-  if (faqReply) {
+  const fm = matchFaq(lastUserText);
+  if (fm) {
     statsDay();
     stats.total++;
+    noteHour();
     stats.faqHits++;
-    return json(200, { reply: faqReply });
+    stats.faqTopics[fm.e.id] = (stats.faqTopics[fm.e.id] || 0) + 1;
+    return json(200, {
+      reply: fm.lang === "en" ? fm.e.re || fm.e.rs : fm.e.rs,
+      topic: fm.e.id,
+      lang: fm.lang,
+    });
   }
 
   // Cloudflare Turnstile (opsional, i padukshëm): aktivizohet vetëm nëse
@@ -505,6 +605,23 @@ exports.handler = async (event) => {
       });
     }
   }
+
+  // Kandidatë për FAQ të reja: pyetje reale (jo-FAQ) që kaluan Turnstile.
+  // Pronari i sheh te dashboard-i dhe i kthen në përgjigje të çastit (zero kuotë).
+  (function () {
+    const n = faqNorm(lastUserText).slice(0, 120);
+    if (n.length >= 12) {
+      statsDay();
+      stats.candidates[n] = (stats.candidates[n] || 0) + 1;
+      const keys = Object.keys(stats.candidates);
+      if (keys.length > 200) {
+        let minK = keys[0];
+        for (const k of keys)
+          if (stats.candidates[k] < stats.candidates[minK]) minK = k;
+        delete stats.candidates[minK];
+      }
+    }
+  })();
 
   const UPSTREAM_URL = env("UPSTREAM_URL");
   const UPSTREAM_KEY = env("UPSTREAM_KEY");
@@ -741,7 +858,11 @@ exports.handler = async (event) => {
       const reply = p.parse(data);
       if (reply) {
         bumpReply(p.id);
-        return json(200, { reply: reply });
+        return json(200, {
+          reply: reply,
+          topic: detectTopic(lastUserText),
+          lang: detectLang(lastUserText),
+        });
       }
       console.error("[chat] " + p.id + ": pa përmbajtje përgjigjeje");
     } catch (e) {
