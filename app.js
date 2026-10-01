@@ -72,11 +72,24 @@
   }
 
   // --- Përshëndetja fillestare (typewriter — shkruhet shkronjë për shkronjë) ---
+  // Mesazhi hyrës i personalizuar nga pronari (nëse e ka vendosur nga dashboard-i).
+  var customWelcome = "";
+  function welcomeText() { return customWelcome || CONFIG.WELCOME_MESSAGE; }
+  function loadWelcome() {
+    try {
+      fetch(ENDPOINT + "?welcome=1").then(function (r) {
+        return r.ok ? r.json() : null;
+      }).then(function (d) {
+        var t = d && String(d.welcome || "").trim();
+        if (t) customWelcome = t;
+      }).catch(function () {});
+    } catch (e) {}
+  }
   function showWelcome() {
     messagesEl.innerHTML = "";
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) { addMessage(CONFIG.WELCOME_MESSAGE, "bot"); }
-    else { typeMessage(CONFIG.WELCOME_MESSAGE); }
+    if (reduce) { addMessage(welcomeText(), "bot"); }
+    else { typeMessage(welcomeText()); }
     input.focus();
   }
 
@@ -444,6 +457,7 @@
     turnstileReady();
     loadTodayCount();
     loadBanner();
+    loadWelcome();
 
     (CONFIG.SUGGESTIONS || []).forEach(function (s) {
       var chip = document.createElement("button");
