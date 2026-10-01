@@ -5,6 +5,9 @@
 <html lang="sq">
 <head>
 <meta charset="UTF-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=73ec2859-8337-4f47-a2d4-2c1d0ec9b9be
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard — Dertli Bot</title>
 <link rel="icon" type="image/png" href="logo.png">
@@ -47,6 +50,22 @@ h2{font-size:13px;color:var(--muted);font-weight:600;margin:22px 0 12px;text-tra
 background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;line-height:1.45}
 .cand-row b{color:var(--gold-bright);flex-shrink:0}
 .cand-note{font-size:12px;color:var(--muted);margin:10px 0 4px;line-height:1.6}
+.cand-row .addbtn{background:linear-gradient(135deg,#d4af37,#b8941f);border:none;border-radius:8px;
+color:#141005;font-weight:700;font-size:12px;padding:6px 10px;cursor:pointer;flex-shrink:0;align-self:center}
+.cand-form{margin:-2px 0 8px 0;background:rgba(212,175,55,.06);border:1px solid rgba(212,175,55,.3);
+border-radius:10px;padding:10px 12px}
+.cand-form textarea{margin-bottom:8px;min-height:50px}
+.faqrow{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:9px 12px;
+background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;line-height:1.45}
+.faqrow .q{flex:1}
+.faqrow .del{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:8px;
+font-size:12px;padding:6px 10px;cursor:pointer;flex-shrink:0;align-self:center}
+.faqrow .del:hover{color:#f87171;border-color:#f87171}
+.week{display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:4px}
+.week .wcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.week .wbar{width:100%;background:linear-gradient(180deg,#f2d879,#b8941f);border-radius:4px 4px 0 0;min-height:3px;opacity:.9}
+.week .wl{font-size:9px;color:var(--muted)}
+.week .wv{font-size:10px;color:var(--gold-bright);font-weight:700}
 .banner-now{font-size:13px;background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.35);
 border-radius:10px;padding:10px 12px;margin-bottom:10px;line-height:1.5}
 textarea{width:100%;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;
@@ -96,10 +115,26 @@ padding:10px 18px;font-weight:700;cursor:pointer;color:#141005;font-size:14px}
     <div class="hbar24" id="hours"></div>
     <div class="hbar24-lbls" id="hours-lbl"></div>
 
+    <h2>Java e fundit</h2>
+    <div class="week" id="week"></div>
+    <div class="btnrow"><button id="csv" type="button" class="ghost" style="font-size:13px">📥 Shkarko statistikat (CSV)</button></div>
+
     <h2>Kandidatë për përgjigje të shpejta</h2>
     <div id="cand"></div>
     <div class="cand-note">Pyetjet që vizitorët bëjnë më shpesh (dhe s'janë ende "të çastit").
     Shtoja në kod si hyrje FAQ — bëhen përgjigje çast me zero kuotë.</div>
+
+    <h2>👋 Mesazhi hyrës</h2>
+    <div class="banner-now" id="welcome-now">(mesazhi i paracaktuar)</div>
+    <textarea id="welcome-text" maxlength="500" placeholder="Shkruaj mesazhin hyrës… (bosh = ai i paracaktuar)"></textarea>
+    <div class="btnrow">
+      <button id="welcome-set" type="button">Ruaje</button>
+      <button id="welcome-clear" type="button" class="ghost">Rikthe paracaktuarin</button>
+    </div>
+
+    <h2>⚡ Përgjigjet e mia të shpejta</h2>
+    <div id="myfaq"></div>
+    <div class="cand-note">Këto janë pyetjet që i ke shtuar vetë nga kandidatët — përgjigjen çast me zero kuotë.</div>
 
     <h2>📢 Banner njoftimi</h2>
     <div class="banner-now" id="banner-now">(asnjë banner aktiv)</div>
@@ -117,7 +152,7 @@ padding:10px 18px;font-weight:700;cursor:pointer;color:#141005;font-size:14px}
 var token = sessionStorage.getItem("dertli_stats_token") || "";
 var TOPIC_LABELS = {iptv:"📺 Çmimet IPTV",erioni:"Kush është Erioni",projektet:"Projektet",
   aftesite:"Aftësitë teknike",kontakti:"Kontakti",identiteti:"Kush je ti",
-  krijuesi:"Kush të krijoi",faleminderit:"Faleminderit",pershendetje:"Përshëndetje"};
+  krijuesi:"Kush të krijoi",faleminderit:"Faleminderit",pershendetje:"Përshëndetje",custom:"⚡ Të miat"};
 function esc(s){
   return String(s).replace(/[&<>"']/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
@@ -185,16 +220,104 @@ function render(s){
   ce.innerHTML = "";
   var cand = s.candidates || [];
   if(!cand.length){ ce.innerHTML = '<div class="foot">Ende asnjë kandidat sot.</div>'; }
-  cand.slice(0, 10).forEach(function(c){
+  var shown = cand.slice(0, 10);
+  if(!shown.length){ ce.innerHTML = '<div class="foot">Ende asnjë kandidat sot.</div>'; }
+  shown.forEach(function(c){
     var row = document.createElement("div");
     row.className = "cand-row";
-    row.innerHTML = "<span>" + esc(c[0]) + "</span><b>×" + c[1] + "</b>";
+    var lbl = document.createElement("span");
+    lbl.textContent = c[0] + " ";
+    var cnt = document.createElement("b");
+    cnt.textContent = "×" + c[1];
+    var add = document.createElement("button");
+    add.type = "button"; add.className = "addbtn"; add.textContent = "+ Shto";
+    add.title = "Shkruaj përgjigjen dhe bëje të çastit";
+    add.addEventListener("click", function(){ openCandForm(row, c[0]); });
+    row.appendChild(lbl); row.appendChild(cnt); row.appendChild(add);
     ce.appendChild(row);
   });
   // Banner
   document.getElementById("banner-now").textContent =
     s.banner ? "Aktiv: " + s.banner : "(asnjë banner aktiv)";
+  // Welcome
+  document.getElementById("welcome-now").textContent =
+    s.welcome ? "Aktiv: " + s.welcome : "(mesazhi i paracaktuar)";
+  // Përgjigjet e mia të shpejta
+  var me = document.getElementById("myfaq");
+  me.innerHTML = "";
+  var mine = s.customFaq || [];
+  if(!mine.length){ me.innerHTML = '<div class="foot">Ende asnjë. Shtoja nga kandidatët më lart.</div>'; }
+  mine.forEach(function(e){
+    var row = document.createElement("div");
+    row.className = "faqrow";
+    var q = document.createElement("span");
+    q.className = "q"; q.textContent = e.q;
+    var del = document.createElement("button");
+    del.type = "button"; del.className = "del"; del.textContent = "Fshi";
+    del.addEventListener("click", function(){
+      ownerPost({ action: "del_faq", token: token, question: e.q }).then(refresh);
+    });
+    row.appendChild(q); row.appendChild(del);
+    me.appendChild(row);
+  });
+  // Grafiku javor: 6 ditët e fundit nga historia + sot
+  var wk = document.getElementById("week");
+  wk.innerHTML = "";
+  var hist = s.history || {};
+  var days = [];
+  for(var i = 6; i >= 0; i--){
+    var d = new Date(); d.setDate(d.getDate() - i);
+    var key = d.toISOString().slice(0, 10);
+    var val = (i === 0) ? s.total : ((hist[key] && hist[key].total) || 0);
+    days.push({ key: key, label: d.toLocaleDateString("sq-AL", { weekday: "short" }), total: val, today: i === 0 });
+  }
+  var wmax = 1;
+  days.forEach(function(x){ if(x.total > wmax) wmax = x.total; });
+  days.forEach(function(x){
+    var col = document.createElement("div");
+    col.className = "wcol";
+    var v = document.createElement("div");
+    v.className = "wv"; v.textContent = x.total;
+    var bar = document.createElement("div");
+    bar.className = "wbar";
+    bar.style.height = Math.max(3, Math.round(x.total / wmax * 64)) + "px";
+    if(x.today) bar.style.opacity = "1"; else bar.style.opacity = ".65";
+    var l = document.createElement("div");
+    l.className = "wl"; l.textContent = x.today ? "sot" : x.label;
+    col.appendChild(v); col.appendChild(bar); col.appendChild(l);
+    wk.appendChild(col);
+  });
   document.getElementById("d-time").textContent = new Date().toLocaleTimeString("sq-AL");
+}
+function openCandForm(row, question){
+  if(row.nextSibling && row.nextSibling.className === "cand-form") return;
+  var f = document.createElement("div");
+  f.className = "cand-form";
+  var ta = document.createElement("textarea");
+  ta.placeholder = "Shkruaj përgjigjen e shpejtë…";
+  var btnrow = document.createElement("div");
+  btnrow.className = "btnrow";
+  var save = document.createElement("button");
+  save.type = "button"; save.textContent = "Ruaje si përgjigje të shpejtë";
+  var cancel = document.createElement("button");
+  cancel.type = "button"; cancel.className = "ghost"; cancel.textContent = "Anulo";
+  save.addEventListener("click", function(){
+    var ans = ta.value.trim();
+    if(ans.length < 4){ ta.focus(); return; }
+    ownerPost({ action: "add_faq", token: token, question: question, answer: ans })
+      .then(function(){ refresh(); });
+  });
+  cancel.addEventListener("click", function(){ f.remove(); });
+  btnrow.appendChild(save); btnrow.appendChild(cancel);
+  f.appendChild(ta); f.appendChild(btnrow);
+  row.parentNode.insertBefore(f, row.nextSibling);
+}
+function ownerPost(body){
+  return fetch("/.netlify/functions/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(function(r){ return r.json(); });
 }
 function setBanner(text){
   return fetch("/.netlify/functions/chat", {
@@ -223,6 +346,44 @@ document.getElementById("banner-set").addEventListener("click", function(){
 document.getElementById("banner-clear").addEventListener("click", function(){
   setBanner("").then(refresh);
 });
+document.getElementById("welcome-set").addEventListener("click", function(){
+  var t = document.getElementById("welcome-text").value.trim();
+  ownerPost({ action: "set_welcome", token: token, text: t }).then(function(){
+    document.getElementById("welcome-text").value = "";
+    refresh();
+  });
+});
+document.getElementById("welcome-clear").addEventListener("click", function(){
+  ownerPost({ action: "set_welcome", token: token, text: "" }).then(refresh);
+});
+document.getElementById("csv").addEventListener("click", function(){
+  fetchStats().then(function(s){
+    var rows = [];
+    rows.push(["seksioni", "celesi", "vlera"]);
+    var day = s.day || new Date().toISOString().slice(0, 10);
+    rows.push(["permledhje", "data", day]);
+    rows.push(["permledhje", "mesazhe", s.total]);
+    rows.push(["permledhje", "te_bllokuara", s.rateLimited]);
+    rows.push(["permledhje", "lockdown", s.lockdownImposed]);
+    rows.push(["permledhje", "te_shpejta", s.faqHits || 0]);
+    rows.push(["permledhje", "pelqime", (s.ratings && s.ratings.up) || 0]);
+    rows.push(["permledhje", "mospelqime", (s.ratings && s.ratings.down) || 0]);
+    Object.keys(s.perLink || {}).forEach(function(k){ rows.push(["hallka", k, s.perLink[k]]); });
+    Object.keys(s.faqTopics || {}).forEach(function(k){ rows.push(["tema", k, s.faqTopics[k]]); });
+    for(var h2 = 0; h2 < 24; h2++){ rows.push(["ora", String(h2), (s.hourly && s.hourly[String(h2)]) || 0]); }
+    (s.candidates || []).forEach(function(c){ rows.push(["kandidat", c[0], c[1]]); });
+    Object.keys(s.history || {}).sort().forEach(function(d){
+      var x = s.history[d];
+      rows.push(["dita", d, "mesazhe=" + x.total + " te_shpejta=" + x.faqHits + " 👍=" + x.up + " 👎=" + x.down]);
+    });
+    var q = function(v){ return '"' + String(v).replace(/"/g, '""') + '"'; };
+    var csv = "﻿" + rows.map(function(r){ return r.map(q).join(","); }).join("\r\n");
+    var a2 = document.createElement("a");
+    a2.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a2.download = "dertli-bot-" + day + ".csv";
+    document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
+  });
+});
 function refresh(){
   if(token) fetchStats().then(render).catch(function(){});
 }
@@ -235,5 +396,46 @@ if(token){
 }
 setInterval(refresh, 60000);
 </script>
-</body>
+<style>/* Anti-copy shield (chat edition) — © Erion Nezha 2026 */img{-webkit-user-drag:none;user-drag:none}</style>
+<script>
+(function(){
+  'use strict';
+  function inField(t){return t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);}
+  document.addEventListener('contextmenu',function(e){if(!inField(e.target))e.preventDefault();},true);
+  document.addEventListener('dragstart',function(e){e.preventDefault();},true);
+  document.addEventListener('keydown',function(e){
+    var code=e.keyCode||e.which;
+    if(code===123){e.preventDefault();return;}
+    if(e.ctrlKey||e.metaKey){
+      var c=String(e.key||'').toLowerCase();
+      if(e.shiftKey&&(c==='i'||c==='j'||c==='c'||c==='k')){e.preventDefault();return;}
+      if(c==='u'||c==='s'){e.preventDefault();return;}
+    }
+  },true);
+  try{
+    console.log('%c© 2026 Erion Nezha — Te gjitha te drejtat e rezervuara.','font-size:14px;font-weight:bold;color:#24e6c6;');
+    console.log('%cKodi i kesaj faqeje eshte i mbrojtur. Mos u mundo ta kopjosh.','color:#8b7bff;');
+  }catch(_){}
+  var warned=false;
+  function check(){
+    if(Math.min(window.screen.width,window.screen.height)<900)return;
+    var open=(window.outerWidth-window.innerWidth>160)||(window.outerHeight-window.innerHeight>160);
+    if(open&&!warned){
+      warned=true;
+      var d=document.createElement('div');
+      d.setAttribute('role','alert');
+      d.style.cssText='position:fixed;right:16px;bottom:16px;z-index:10001;max-width:320px;background:#0d1017;border:1px solid rgba(36,230,198,.4);border-radius:12px;padding:14px 40px 14px 16px;font:13px/1.5 system-ui,sans-serif;color:#e9edf5;box-shadow:0 20px 60px -20px rgba(0,0,0,.6);';
+      d.innerHTML='<strong style="color:#24e6c6">Mbrojtje aktive</strong><br>Kodi i kesaj faqeje eshte i mbrojtur nga kopjimi. &copy; Erion Nezha';
+      var x=document.createElement('button');
+      x.textContent='×';x.setAttribute('aria-label','Mbyll');
+      x.style.cssText='position:absolute;top:6px;right:10px;background:none;border:0;color:#97a1b5;font-size:18px;cursor:pointer;line-height:1;';
+      x.onclick=function(){if(d.parentNode)d.parentNode.removeChild(d);};
+      d.appendChild(x);document.body.appendChild(d);
+      setTimeout(function(){if(d.parentNode)d.parentNode.removeChild(d);},8000);
+    }
+    if(!open)warned=false;
+  }
+  setInterval(check,2000);
+})();
+</script></body>
 </html>
