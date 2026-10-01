@@ -88,6 +88,21 @@ body{
   border:1px solid var(--line);
   border-radius:4px 16px 16px 16px;
 }
+/* Mesazhi i lockdown-it: stil premium gold — dallon nga gabimet e zakonshme. */
+.message.bot.lockdown .bubble{
+  background:linear-gradient(135deg,rgba(212,175,55,.14),rgba(212,175,55,.05));
+  border:1px solid rgba(212,175,55,.65);
+  box-shadow:0 0 22px rgba(212,175,55,.22), inset 0 0 18px rgba(212,175,55,.06);
+}
+.message.bot.lockdown .avatar{
+  box-shadow:0 0 14px rgba(212,175,55,.5);
+}
+#today-count{
+  opacity:.6;
+  font-size:11.5px;
+  margin-left:6px;
+  white-space:nowrap;
+}
 .message.user .bubble{
   background:linear-gradient(135deg,var(--gold-bright),var(--gold) 60%,#a8841c);
   color:#1a1405;font-weight:500;
