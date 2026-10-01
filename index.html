@@ -3,9 +3,19 @@
 <html lang="sq">
 <head>
 <meta charset="UTF-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=73ec2859-8337-4f47-a2d4-2c1d0ec9b9be
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dertli Bot</title>
 <link rel="icon" type="image/png" href="logo.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0a0b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dertli Bot">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -42,8 +52,51 @@
     <button id="send-btn" type="submit" title="Dërgo">➤</button>
   </form>
 </div>
-
+<script>
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});}
+</script>
 <script src="config.js"></script>
 <script src="app.js"></script>
-</body>
+<style>/* Anti-copy shield (chat edition) — © Erion Nezha 2026 */img{-webkit-user-drag:none;user-drag:none}</style>
+<script>
+(function(){
+  'use strict';
+  function inField(t){return t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);}
+  document.addEventListener('contextmenu',function(e){if(!inField(e.target))e.preventDefault();},true);
+  document.addEventListener('dragstart',function(e){e.preventDefault();},true);
+  document.addEventListener('keydown',function(e){
+    var code=e.keyCode||e.which;
+    if(code===123){e.preventDefault();return;}
+    if(e.ctrlKey||e.metaKey){
+      var c=String(e.key||'').toLowerCase();
+      if(e.shiftKey&&(c==='i'||c==='j'||c==='c'||c==='k')){e.preventDefault();return;}
+      if(c==='u'||c==='s'){e.preventDefault();return;}
+    }
+  },true);
+  try{
+    console.log('%c© 2026 Erion Nezha — Te gjitha te drejtat e rezervuara.','font-size:14px;font-weight:bold;color:#24e6c6;');
+    console.log('%cKodi i kesaj faqeje eshte i mbrojtur. Mos u mundo ta kopjosh.','color:#8b7bff;');
+  }catch(_){}
+  var warned=false;
+  function check(){
+    if(Math.min(window.screen.width,window.screen.height)<900)return;
+    var open=(window.outerWidth-window.innerWidth>160)||(window.outerHeight-window.innerHeight>160);
+    if(open&&!warned){
+      warned=true;
+      var d=document.createElement('div');
+      d.setAttribute('role','alert');
+      d.style.cssText='position:fixed;right:16px;bottom:16px;z-index:10001;max-width:320px;background:#0d1017;border:1px solid rgba(36,230,198,.4);border-radius:12px;padding:14px 40px 14px 16px;font:13px/1.5 system-ui,sans-serif;color:#e9edf5;box-shadow:0 20px 60px -20px rgba(0,0,0,.6);';
+      d.innerHTML='<strong style="color:#24e6c6">Mbrojtje aktive</strong><br>Kodi i kesaj faqeje eshte i mbrojtur nga kopjimi. &copy; Erion Nezha';
+      var x=document.createElement('button');
+      x.textContent='×';x.setAttribute('aria-label','Mbyll');
+      x.style.cssText='position:absolute;top:6px;right:10px;background:none;border:0;color:#97a1b5;font-size:18px;cursor:pointer;line-height:1;';
+      x.onclick=function(){if(d.parentNode)d.parentNode.removeChild(d);};
+      d.appendChild(x);document.body.appendChild(d);
+      setTimeout(function(){if(d.parentNode)d.parentNode.removeChild(d);},8000);
+    }
+    if(!open)warned=false;
+  }
+  setInterval(check,2000);
+})();
+</script></body>
 </html>

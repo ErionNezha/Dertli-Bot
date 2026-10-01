@@ -93,6 +93,51 @@ const LOCKDOWN_BURST_MS = 12 * 60 * 60 * 1000;
 const rateBuckets = new Map(); // ip -> [epoch ms të kërkesave]
 const abuseHits = new Map(); // ip -> [epoch ms të refuzimeve 429]
 const lockdowns = new Map(); // ip -> epoch ms kur mbaron pauza
+const manualBlocks = {}; // ip -> {at} — bllokime manuale nga pronari (pa skadencë)
+const abuseLog = {}; // ip -> {count, last} — IP që kanë marrë lockdown (private, vetëm pronari)
+function noteAbuse(ip) {
+  const e = abuseLog[ip] || (abuseLog[ip] = { count: 0, last: "" });
+  e.count++;
+  e.last = new Date().toISOString();
+}
+// Autorizimi i pronarit: header X-Stats-Token (mënyra e sigurt); body.token mbahet
+// si rezervë sepse dashboard-i e dërgon edhe aty. Tokeni NUK pranohet kurrë në URL.
+function ownerAuthorized(event, body) {
+  const t = String(process.env.STATS_TOKEN || "").trim();
+  if (!t) return false;
+  const h = (event && event.headers) || {};
+  const given = String(
+    h["x-stats-token"] || h["X-Stats-Token"] || (body && body.token) || ""
+  );
+  return given === t;
+}
+// Batuta pa kuotë — zgjidhet rastësisht.
+const JOKES_SQ = [
+  "Pse programuesit i ngatërrojnë Halloween-in me Krishtlindjet? Sepse OCT 31 == DEC 25! 🎃",
+  "Sa programues duhen për të ndërruar një llambë? Asnjë — është problem hardware! 💡",
+  "I thonë bug-ut: \"Ti je feature!\" 🐞",
+  "Pse kompjuteri shkoi te doktori? Se kishte virus! 🦠",
+  "Cili është ushqimi i preferuar i programuesit? Cookies! 🍪",
+  "Pse JavaScript-i u nda me JSON-in? Kishte shumë baggage! 😄",
+];
+const JOKES_EN = [
+  "Why do programmers prefer dark mode? Because light attracts bugs! 🐞",
+  "How many programmers does it take to change a light bulb? None — that's a hardware problem! 💡",
+  "Why did the developer go broke? Because he used up all his cache! 💸",
+  "Why do Java developers wear glasses? Because they don't C#! 👓",
+  "What's a programmer's favorite hangout place? Foo Bar! 🍻",
+  "I told my computer I needed a break… now it won't stop sending me KitKat ads! 🍫",
+];
+function matchJoke(text) {
+  const n = faqNorm(text);
+  if (!n) return null;
+  if (!/(batut|baut|qesh|humor|joke|funny)/.test(n)) return null;
+  // Gjuha zgjidhet drejtpërdrejt nga fjalët "joke"/"funny" — jo nga heuristika
+  // (detectLang bie në default shqip për fraza të shkurtra si "tell me a joke").
+  const en = /(joke|funny)/i.test(text);
+  const arr = en ? JOKES_EN : JOKES_SQ;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 function clientIp(event) {
   const h = event.headers || {};
@@ -131,6 +176,7 @@ function originAllowed(event) {
 function checkAbuse(ip) {
   const now = Date.now();
   // 3) Lockdown aktiv? — ende në pauzë.
+  if (manualBlocks[ip]) return "lockdown";
   const until = lockdowns.get(ip) || 0;
   if (until > now) return "lockdown";
   if (until) lockdowns.delete(ip);
@@ -148,6 +194,7 @@ function checkAbuse(ip) {
   for (let i = reqs.length - 1; i >= 0 && reqs[i] >= burstCut; i--) burst++;
   if (burst >= BURST_MAX) {
     lockdowns.set(ip, now + LOCKDOWN_BURST_MS);
+    noteAbuse(ip);
     statsDay();
     stats.lockdownImposed++;
     return "lockdown";
@@ -165,6 +212,7 @@ function checkAbuse(ip) {
     // Injoron paralajmërimet dhe vazhdon të godasë → lockdown.
     if (hits.length >= ABUSE_429_MAX) {
       lockdowns.set(ip, now + LOCKDOWN_MS);
+      noteAbuse(ip);
       statsDay();
       stats.lockdownImposed++;
       return "lockdown";
@@ -201,6 +249,9 @@ const stats = {
   welcome: "",      // mesazhi hyrës i personalizuar nga pronari (bosh = ai i paracaktuar)
   customFaq: [],    // [{q: pyetje e normalizuar, answer: teksti}] — shtuar nga admin
   history: {},      // "YYYY-MM-DD" -> {total, faqHits, up, down, rateLimited, lockdownImposed}
+  leads: [],        // [{name, contact, at}] — kontakte të lëna nga vizitorët
+  pollVotes: {},    // idx -> vota për sondazhin publik
+  suggestions: [],  // [{q, suggestion, at}] — sugjerime nga vizitorët për përgjigje më të mira
 };
 function statsDay() {
   const d = new Date().toISOString().slice(0, 10);
@@ -229,7 +280,7 @@ function statsDay() {
     stats.ratings = { up: 0, down: 0 };
     stats.candidates = {};
     stats.banner = "";
-    // welcome dhe customFaq MBETEN — janë cilësime të pronarit, jo të dhëna ditore.
+    // welcome, customFaq, leads, pollVotes, suggestions MBETEN — janë të dhëna/cilësime të pronarit.
   }
   return d;
 }
@@ -253,14 +304,13 @@ function handleStats(event) {
     lockdownImposed: stats.lockdownImposed,
     faqHits: stats.faqHits,
     ratings: { up: stats.ratings.up, down: stats.ratings.down },
+    candidateCount: Object.keys(stats.candidates).length,
   };
   const token = String(process.env.STATS_TOKEN || "").trim();
   const q = (event && event.queryStringParameters) || {};
   const h = (event && event.headers) || {};
-  // Tokeni pranohet me header (mënyra e re, e sigurt) ose query string (e vjetra).
-  const given = String(
-    q.token || h["x-stats-token"] || h["X-Stats-Token"] || ""
-  );
+  // Tokeni pranohet VETËM me header X-Stats-Token — kurrë në query string (log-et).
+  const given = String(h["x-stats-token"] || h["X-Stats-Token"] || "");
   if (token && given === token) {
     const cand = Object.keys(stats.candidates)
       .map(function (k) { return [k, stats.candidates[k]]; })
@@ -275,6 +325,21 @@ function handleStats(event) {
       welcome: stats.welcome,
       customFaq: stats.customFaq.map(function (e) { return { q: e.q, answer: e.answer }; }),
       history: stats.history,
+      leads: stats.leads,
+      pollVotes: stats.pollVotes,
+      suggestions: stats.suggestions,
+      manualBlocks: Object.keys(manualBlocks),
+      abusiveIps: Object.keys(abuseLog)
+        .map(function (ip) {
+          return {
+            ip: ip,
+            count: abuseLog[ip].count,
+            last: abuseLog[ip].last,
+            blocked: !!manualBlocks[ip],
+          };
+        })
+        .sort(function (a, b) { return b.count - a.count; })
+        .slice(0, 50),
     };
     for (const k in pub) full[k] = pub[k];
     return json(200, full);
@@ -576,10 +641,44 @@ exports.handler = async (event) => {
     return json(400, { error: "Vlerë e pavlefshme." });
   }
 
+  // Lënia e kontaktit nga vizitori (lead): pa kuotë, pa Turnstile.
+  if (body.action === "lead") {
+    const name = String(body.name || "").slice(0, 60).trim();
+    const contact = String(body.contact || "").slice(0, 80).trim();
+    if (name.length < 2 || contact.length < 5) {
+      return json(400, { error: "Plotëso emrin dhe kontaktin." });
+    }
+    statsDay();
+    stats.leads.push({ name: name, contact: contact, at: new Date().toISOString() });
+    if (stats.leads.length > 200) stats.leads.shift();
+    return json(200, { ok: true });
+  }
+
+  // Vota në sondazhin publik: pa kuotë, pa Turnstile.
+  if (body.action === "vote_poll") {
+    const idx = parseInt(body.option, 10);
+    if (isNaN(idx) || idx < 0 || idx > 9) return json(400, { error: "Opsion i pavlefshëm." });
+    statsDay();
+    stats.pollVotes[idx] = (stats.pollVotes[idx] || 0) + 1;
+    return json(200, { ok: true });
+  }
+
+  // Sugjerim nga vizitori për përgjigje më të mirë: pa kuotë, pa Turnstile.
+  if (body.action === "suggest") {
+    const q = String(body.question || "").slice(0, 200).trim();
+    const sug = String(body.suggestion || "").slice(0, 1000).trim();
+    if (q.length < 4 || sug.length < 4) {
+      return json(400, { error: "Sugjerimi është shumë i shkurtër." });
+    }
+    statsDay();
+    stats.suggestions.push({ q: q, suggestion: sug, at: new Date().toISOString() });
+    if (stats.suggestions.length > 200) stats.suggestions.shift();
+    return json(200, { ok: true });
+  }
+
   // Banner-i i njoftimit: vetëm pronari me STATS_TOKEN.
   if (body.action === "set_banner") {
-    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
-    if (!ownerToken || String(body.token || "") !== ownerToken) {
+    if (!ownerAuthorized(event, body)) {
       return json(403, { error: "Nuk lejohet." });
     }
     statsDay();
@@ -589,8 +688,7 @@ exports.handler = async (event) => {
 
   // Mesazhi hyrës i personalizuar: vetëm pronari me STATS_TOKEN.
   if (body.action === "set_welcome") {
-    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
-    if (!ownerToken || String(body.token || "") !== ownerToken) {
+    if (!ownerAuthorized(event, body)) {
       return json(403, { error: "Nuk lejohet." });
     }
     statsDay();
@@ -600,8 +698,7 @@ exports.handler = async (event) => {
 
   // Shto përgjigje të shpejtë nga një kandidat: vetëm pronari.
   if (body.action === "add_faq") {
-    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
-    if (!ownerToken || String(body.token || "") !== ownerToken) {
+    if (!ownerAuthorized(event, body)) {
       return json(403, { error: "Nuk lejohet." });
     }
     const qn = faqNorm(String(body.question || "")).slice(0, 120);
@@ -620,8 +717,7 @@ exports.handler = async (event) => {
 
   // Fshi një përgjigje të shpejtë të shtuar nga pronari.
   if (body.action === "del_faq") {
-    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
-    if (!ownerToken || String(body.token || "") !== ownerToken) {
+    if (!ownerAuthorized(event, body)) {
       return json(403, { error: "Nuk lejohet." });
     }
     const qn = faqNorm(String(body.question || ""));
@@ -630,7 +726,78 @@ exports.handler = async (event) => {
     return json(200, { ok: true, count: stats.customFaq.length });
   }
 
+  // Blloko IP manualisht: vetëm pronari.
+  if (body.action === "block_ip" || body.action === "unblock_ip") {
+    if (!ownerAuthorized(event, body)) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    const ip = String(body.ip || "").trim();
+    if (!/^[0-9a-fA-F:.]{3,45}$/.test(ip)) return json(400, { error: "IP e pavlefshme." });
+    if (body.action === "block_ip") manualBlocks[ip] = { at: new Date().toISOString() };
+    else delete manualBlocks[ip];
+    return json(200, { ok: true, blocked: Object.keys(manualBlocks) });
+  }
+
+  // Fshi një lead: vetëm pronari.
+  if (body.action === "del_lead") {
+    if (!ownerAuthorized(event, body)) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    const idx = parseInt(body.idx, 10);
+    if (!isNaN(idx) && stats.leads[idx]) stats.leads.splice(idx, 1);
+    return json(200, { ok: true });
+  }
+
+  // Fshi një sugjerim: vetëm pronari.
+  if (body.action === "del_suggestion") {
+    if (!ownerAuthorized(event, body)) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    const idx = parseInt(body.idx, 10);
+    if (!isNaN(idx) && stats.suggestions[idx]) stats.suggestions.splice(idx, 1);
+    return json(200, { ok: true });
+  }
+
+  // Eksporto cilësimet (welcome, banner, FAQ custom): vetëm pronari.
+  if (body.action === "export_settings") {
+    if (!ownerAuthorized(event, body)) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    return json(200, {
+      ok: true,
+      settings: { welcome: stats.welcome, banner: stats.banner, customFaq: stats.customFaq },
+    });
+  }
+
+  // Importo cilësimet: vetëm pronari.
+  if (body.action === "import_settings") {
+    if (!ownerAuthorized(event, body)) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    const d = body.data || {};
+    statsDay();
+    if (typeof d.welcome === "string") stats.welcome = d.welcome.slice(0, 500);
+    if (typeof d.banner === "string") stats.banner = d.banner.slice(0, 200);
+    if (Array.isArray(d.customFaq)) {
+      const clean = d.customFaq
+        .filter(function (e) { return e && typeof e.q === "string" && typeof e.answer === "string"; })
+        .slice(0, 100)
+        .map(function (e) { return { q: e.q.slice(0, 120), answer: e.answer.slice(0, 1000) }; });
+      stats.customFaq = clean;
+    }
+    return json(200, { ok: true });
+  }
+
   // Pyetjet e shpeshta: përgjigje çast pa djegur kuotë.
+  const joke = matchJoke(lastUserText);
+  if (joke) {
+    statsDay();
+    stats.total++;
+    noteHour();
+    stats.faqHits++;
+    stats.faqTopics.joke = (stats.faqTopics.joke || 0) + 1;
+    return json(200, { reply: joke, topic: "custom", lang: detectLang(lastUserText) });
+  }
   const custom = matchCustomFaq(lastUserText);
   if (custom) {
     statsDay();

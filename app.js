@@ -52,6 +52,7 @@
       wrap.innerHTML = '<div class="avatar">' + botAvatarHTML() + '</div><div class="bubble-wrap"><div class="bubble">' + formatText(text) + '</div><div class="msg-actions">'
         + '<button type="button" class="msg-act fb-up" title="Më pëlqeu">👍</button>'
         + '<button type="button" class="msg-act fb-down" title="Nuk më pëlqeu">👎</button>'
+        + '<button type="button" class="msg-act sg-open" title="💡">💡</button>'
         + "</div></div>";
       wireMessageActions(wrap, mid);
       if (topic) addFollowups(wrap, topic, lang);
@@ -74,22 +75,29 @@
   // --- Përshëndetja fillestare (typewriter — shkruhet shkronjë për shkronjë) ---
   // Mesazhi hyrës i personalizuar nga pronari (nëse e ka vendosur nga dashboard-i).
   var customWelcome = "";
-  function welcomeText() { return customWelcome || CONFIG.WELCOME_MESSAGE; }
-  function loadWelcome() {
+  function welcomeText(wasVisited) {
+    var base = customWelcome || CONFIG.WELCOME_MESSAGE;
+    if (wasVisited) return t("welcomeBack") + base;
+    return base;
+  }
+  function loadWelcome(cb) {
+    var done = false;
+    function fin() { if (!done) { done = true; if (cb) cb(); } }
     try {
       fetch(ENDPOINT + "?welcome=1").then(function (r) {
         return r.ok ? r.json() : null;
       }).then(function (d) {
         var t = d && String(d.welcome || "").trim();
         if (t) customWelcome = t;
-      }).catch(function () {});
-    } catch (e) {}
+      }).catch(function () {}).then(fin);
+    } catch (e) { fin(); }
+    setTimeout(fin, 4000); // siguri: mos e blloko mirëseardhjen nëse rrjeti vonon
   }
-  function showWelcome() {
+  function showWelcome(wasVisited) {
     messagesEl.innerHTML = "";
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) { addMessage(welcomeText(), "bot"); }
-    else { typeMessage(welcomeText()); }
+    if (reduce) { addMessage(welcomeText(wasVisited), "bot"); }
+    else { typeMessage(welcomeText(wasVisited)); }
     input.focus();
   }
 
@@ -102,6 +110,7 @@
       + '<span class="tw-text"></span><span class="tw-caret"></span></div><div class="msg-actions">'
       + '<button type="button" class="msg-act fb-up" title="Më pëlqeu">👍</button>'
       + '<button type="button" class="msg-act fb-down" title="Nuk më pëlqeu">👎</button>'
+      + '<button type="button" class="msg-act sg-open" title="💡">💡</button>'
       + "</div></div>";
     messagesEl.appendChild(wrap);
     wireMessageActions(wrap, mid);
@@ -152,6 +161,8 @@
     }
     if (up) up.addEventListener("click", function () { vote("up"); });
     if (down) down.addEventListener("click", function () { vote("down"); });
+    var sg = wrap.querySelector(".sg-open");
+    if (sg) sg.addEventListener("click", function () { openSuggestForm(wrap); });
     paint();
   }
 
@@ -296,6 +307,8 @@
 
     addMessage(text, "user");
     input.value = "";
+    lastUserQ = text;
+    checkBadges();
     history.push({ role: "user", content: text });
     callApi();
   }
@@ -446,6 +459,258 @@
     });
   }
 
+  // ============ VEÇORITË PREMIUM v3 ============
+  // --- Gjuha e ndërfaqes (SQ/EN) ---
+  var lang = "sq";
+  try { lang = localStorage.getItem("dertli-lang") || "sq"; } catch (e) {}
+  if (lang !== "en") lang = "sq";
+  function t(key) {
+    var ui = (CONFIG.UI && CONFIG.UI[lang]) || {};
+    return ui[key] !== undefined ? ui[key] : key;
+  }
+  function setLang(l) {
+    lang = (l === "en") ? "en" : "sq";
+    try { localStorage.setItem("dertli-lang", lang); } catch (e) {}
+    applyLang();
+  }
+  function applyLang() {
+    try {
+      input.placeholder = t("placeholder");
+      if (sendBtn) sendBtn.title = t("sendTitle");
+      var micB = $("mic-btn"); if (micB) micB.title = t("micTitle");
+      var attB = $("attach-btn"); if (attB) attB.title = t("attachTitle");
+      var langB = $("lang-btn"); if (langB) langB.title = t("langTitle");
+      var themeB = $("theme-btn"); if (themeB) themeB.title = t("themeTitle");
+      var st = document.querySelector(".bot-status");
+      if (st) {
+        for (var i = 0; i < st.childNodes.length; i++) {
+          var cn = st.childNodes[i];
+          if (cn.nodeType === 3 && cn.nodeValue.trim()) { cn.nodeValue = " " + t("online"); break; }
+        }
+      }
+      renderSuggestions();
+    } catch (e) {}
+  }
+
+  // --- Tema e çelur / e errët ---
+  var theme = "dark";
+  try { theme = localStorage.getItem("dertli-theme") || "dark"; } catch (e) {}
+  function applyTheme() {
+    document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "dark");
+    var b = $("theme-btn");
+    if (b) b.textContent = theme === "light" ? "🌙" : "☀️";
+  }
+  function toggleTheme() {
+    theme = (theme === "light") ? "dark" : "light";
+    try { localStorage.setItem("dertli-theme", theme); } catch (e) {}
+    applyTheme();
+  }
+
+  // --- Butonat e header-it (gjuha + tema), injektohen me JS ---
+  function injectHeaderButtons() {
+    try {
+      var ha = document.querySelector(".header-actions");
+      if (!ha || $("lang-btn")) return;
+      var lb = document.createElement("button");
+      lb.id = "lang-btn"; lb.type = "button"; lb.className = "icon-btn";
+      lb.textContent = "🌍"; lb.title = t("langTitle");
+      lb.addEventListener("click", function () { setLang(lang === "sq" ? "en" : "sq"); });
+      var tb = document.createElement("button");
+      tb.id = "theme-btn"; tb.type = "button"; tb.className = "icon-btn";
+      tb.title = t("themeTitle");
+      tb.addEventListener("click", toggleTheme);
+      ha.insertBefore(tb, ha.firstChild);
+      ha.insertBefore(lb, ha.firstChild);
+    } catch (e) {}
+  }
+
+  // --- Pyetja e ditës ---
+  function questionOfDay() {
+    var list = CONFIG.QUESTION_OF_DAY || [];
+    if (!list.length) return null;
+    var idx = Math.floor(Date.now() / 86400000) % list.length;
+    return list[idx];
+  }
+
+  // --- Sugjerimet: rindërtohen sipas gjuhës + chip-e speciale ---
+  function renderSuggestions() {
+    try {
+      suggestionsEl.innerHTML = "";
+      var qd = questionOfDay();
+      if (qd) {
+        var qc = document.createElement("button");
+        qc.type = "button"; qc.className = "chip chip-qotd";
+        var qt = qd[lang] || qd.sq;
+        qc.innerHTML = '<span class="qotd-label">' + escH(t("qotd")) + '</span><span>' + escH(qt) + "</span>";
+        qc.addEventListener("click", function () { send(qt); });
+        suggestionsEl.appendChild(qc);
+      }
+      var list = (lang === "en" && CONFIG.SUGGESTIONS_EN) ? CONFIG.SUGGESTIONS_EN : CONFIG.SUGGESTIONS;
+      (list || []).forEach(function (s) {
+        var chip = document.createElement("button");
+        chip.type = "button"; chip.className = "chip"; chip.textContent = s;
+        chip.addEventListener("click", function () { send(s); });
+        suggestionsEl.appendChild(chip);
+      });
+      [["leadBtn", showLeadForm], ["quizBtn", startQuiz], ["pollBtn", showPoll]].forEach(function (p) {
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "chip chip-gold"; b.textContent = t(p[0]);
+        b.addEventListener("click", p[1]);
+        suggestionsEl.appendChild(b);
+      });
+    } catch (e) {}
+  }
+
+  // --- Ndihmës për mesazhe bot-i me përmbajtje HTML ---
+  function botHtml(html) {
+    botMsgSeq++;
+    var wrap = document.createElement("div");
+    wrap.className = "message bot";
+    wrap.innerHTML = '<div class="avatar">' + botAvatarHTML() + '</div><div class="bubble-wrap"><div class="bubble">' + html + "</div></div>";
+    messagesEl.appendChild(wrap);
+    scrollBottom();
+    return wrap;
+  }
+  function escH(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // --- 📩 Kapja e kontakteve ---
+  function showLeadForm() {
+    var box = botHtml(
+      "<b>" + escH(t("leadBtn")) + "</b><br>" +
+      '<input class="lead-in" id="lead-name" placeholder="' + escH(t("leadName")) + '" maxlength="60"><br>' +
+      '<input class="lead-in" id="lead-contact" placeholder="' + escH(t("leadContact")) + '" maxlength="80"><br>' +
+      '<div class="lead-row"><button type="button" class="chip chip-gold" id="lead-send">' + escH(t("leadSend")) + '</button>' +
+      '<button type="button" class="chip" id="lead-cancel">' + escH(t("leadCancel")) + "</button></div>"
+    );
+    box.querySelector("#lead-cancel").addEventListener("click", function () { box.remove(); });
+    box.querySelector("#lead-send").addEventListener("click", function () {
+      var nm = box.querySelector("#lead-name").value.trim();
+      var ct = box.querySelector("#lead-contact").value.trim();
+      if (nm.length < 2 || ct.length < 5) return;
+      fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "lead", name: nm, contact: ct })
+      }).catch(function () {});
+      box.querySelector(".bubble").textContent = t("leadOk");
+    });
+  }
+
+  // --- 🧩 Kuizi ---
+  var quizState = null;
+  function startQuiz() {
+    var qs = CONFIG.QUIZ || [];
+    if (!qs.length) return;
+    quizState = { i: 0, score: 0 };
+    askQuiz();
+  }
+  function askQuiz() {
+    var qs = CONFIG.QUIZ;
+    var st = quizState;
+    if (st.i >= qs.length) {
+      var total = qs.length;
+      var msg = t("quizDone") + " " + st.score + "/" + total + " ";
+      msg += st.score === total ? "🏆" : (st.score >= total / 2 ? "👏" : "💪");
+      addMessage(msg, "bot");
+      quizState = null;
+      return;
+    }
+    var q = qs[st.i];
+    var opts = (lang === "en" ? q.o_en : q.o) || q.o;
+    var html = "<b>🧩 " + (st.i + 1) + "/" + qs.length + ":</b> " + escH(lang === "en" ? q.q_en : q.q) + '<div class="opt-list">';
+    opts.forEach(function (o, i) {
+      html += '<button type="button" class="opt-btn" data-i="' + i + '">' + escH(o) + "</button>";
+    });
+    var box = botHtml(html + "</div>");
+    var btns = box.querySelectorAll(".opt-btn");
+    btns.forEach(function (b) {
+      b.addEventListener("click", function () {
+        var pick = parseInt(b.getAttribute("data-i"), 10);
+        if (pick === q.c) st.score++;
+        btns.forEach(function (x) {
+          x.disabled = true;
+          var xi = parseInt(x.getAttribute("data-i"), 10);
+          if (xi === q.c) x.classList.add("opt-ok");
+          else if (xi === pick) x.classList.add("opt-bad");
+        });
+        st.i++;
+        setTimeout(askQuiz, 900);
+      });
+    });
+  }
+
+  // --- 🗳️ Sondazhi ---
+  function showPoll() {
+    var p = CONFIG.POLL;
+    if (!p) return;
+    var opts = (lang === "en" ? p.o_en : p.o) || p.o;
+    var html = "<b>🗳️ " + escH(lang === "en" ? p.q_en : p.q) + '</b><div class="opt-list">';
+    opts.forEach(function (o, i) {
+      html += '<button type="button" class="opt-btn" data-i="' + i + '">' + escH(o) + "</button>";
+    });
+    var box = botHtml(html + "</div>");
+    box.querySelectorAll(".opt-btn").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var idx = b.getAttribute("data-i");
+        fetch(ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "vote_poll", option: idx })
+        }).catch(function () {});
+        box.querySelectorAll(".opt-btn").forEach(function (x) { x.disabled = true; });
+        b.classList.add("opt-ok");
+        setTimeout(function () { box.querySelector(".bubble").textContent = t("pollOk"); }, 600);
+      });
+    });
+  }
+
+  // --- 💡 Sugjero përgjigje më të mirë (nën çdo përgjigje të botit) ---
+  var lastUserQ = "";
+  function openSuggestForm(wrap) {
+    if (wrap.querySelector(".suggest-form")) return;
+    var f = document.createElement("div");
+    f.className = "suggest-form";
+    f.innerHTML = '<textarea class="suggest-ta" placeholder="' + escH(t("suggestPh")) + '" maxlength="1000"></textarea>' +
+      '<div class="lead-row"><button type="button" class="chip chip-gold sg-send">' + escH(t("leadSend")) + '</button>' +
+      '<button type="button" class="chip sg-cancel">' + escH(t("leadCancel")) + "</button></div>";
+    (wrap.querySelector(".bubble-wrap") || wrap).appendChild(f);
+    scrollBottom();
+    f.querySelector(".sg-cancel").addEventListener("click", function () { f.remove(); });
+    f.querySelector(".sg-send").addEventListener("click", function () {
+      var v = f.querySelector(".suggest-ta").value.trim();
+      if (v.length < 4) return;
+      fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "suggest", question: lastUserQ, suggestion: v })
+      }).catch(function () {});
+      f.innerHTML = "<i>" + escH(t("suggestOk")) + "</i>";
+    });
+  }
+
+  // --- 🏅 Badge-e ---
+  function checkBadges() {
+    try {
+      var n = 0;
+      try { n = parseInt(localStorage.getItem("dertli-msgcount") || "0", 10) || 0; } catch (e) {}
+      n++;
+      try { localStorage.setItem("dertli-msgcount", String(n)); } catch (e) {}
+      var got = [];
+      try { got = JSON.parse(localStorage.getItem("dertli-badges") || "[]"); } catch (e) {}
+      (CONFIG.BADGES || []).forEach(function (b) {
+        if (b.at === n && got.indexOf(b.at) === -1) {
+          got.push(b.at);
+          addMessage(lang === "en" ? b.en : b.sq, "bot");
+        }
+      });
+      try { localStorage.setItem("dertli-badges", JSON.stringify(got)); } catch (e) {}
+    } catch (e) {}
+  }
+
   function init() {
     document.title = CONFIG.BOT_NAME;
     $("bot-name").textContent = CONFIG.BOT_NAME;
@@ -453,20 +718,21 @@
     if (CONFIG.BOT_AVATAR_IMG) { $("bot-avatar").innerHTML = '<img src="' + CONFIG.BOT_AVATAR_IMG + '" alt="Dertli Bot">'; } else { $("bot-avatar").textContent = CONFIG.BOT_AVATAR; }
     document.documentElement.style.setProperty("--primary", CONFIG.THEME_COLOR);
 
-    showWelcome();
+    injectHeaderButtons();
+    applyTheme();
+    // "Mirë se erdhe sërish" vetëm për vizitorët e kthyer — vizita regjistrohet
+    // PAS shfaqjes së mirëseardhjes, dhe welcome-i custom ngarkohet fillimisht.
+    var wasVisited = false;
+    try { wasVisited = !!localStorage.getItem("dertli-visited"); } catch (e) {}
+
+    loadWelcome(function () {
+      showWelcome(wasVisited);
+      try { localStorage.setItem("dertli-visited", "1"); } catch (e) {}
+    });
     turnstileReady();
     loadTodayCount();
     loadBanner();
-    loadWelcome();
-
-    (CONFIG.SUGGESTIONS || []).forEach(function (s) {
-      var chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip";
-      chip.textContent = s;
-      chip.addEventListener("click", function () { send(s); });
-      suggestionsEl.appendChild(chip);
-    });
+    applyLang();
 
     // --- Pluhur ari ambient (animim vetem transform/opacity — shume i lehte) ---
     try {
