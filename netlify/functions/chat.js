@@ -192,6 +192,7 @@ const stats = {
   perLink: {},
   rateLimited: 0,
   lockdownImposed: 0,
+  faqHits: 0,
 };
 function statsDay() {
   const d = new Date().toISOString().slice(0, 10);
@@ -201,6 +202,7 @@ function statsDay() {
     stats.perLink = {};
     stats.rateLimited = 0;
     stats.lockdownImposed = 0;
+    stats.faqHits = 0;
   }
   return d;
 }
@@ -216,6 +218,7 @@ function handleStats(event) {
     total: stats.total,
     rateLimited: stats.rateLimited,
     lockdownImposed: stats.lockdownImposed,
+    faqHits: stats.faqHits,
   };
   const token = String(process.env.STATS_TOKEN || "").trim();
   const q = (event && event.queryStringParameters) || {};
@@ -235,6 +238,88 @@ function textOf(content) {
       .map((p) => (p && p.type === "text" && typeof p.text === "string" ? p.text : ""))
       .join(" ");
   return "";
+}
+
+// Memoria e pyetjeve të shpeshta (FAQ): përgjigje ÇAST nga serveri,
+// pa prekur asnjë ofrues — zero kuotë e djegur, zero vonesë.
+// Përgjigjet vijnë nga informacioni publik i system prompt-it.
+// Kontrollohet pas rate limit-it (mbrojtja nga abuzimi mbetet) dhe
+// pas komandës /stats; nuk tregon KURRË emra ofruesish (ligji blind).
+function faqNorm(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[ë]/g, "e")
+    .replace(/[ç]/g, "c")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+const FAQ = [
+  {
+    ps: ["cmimet iptv","sa kushton iptv","sa kushtojne paketat","paketat iptv","cmimi iptv","iptv cmim","sa kushton abonimi"],
+    pe: ["price iptv","iptv price","how much is iptv","iptv prices","iptv packages"],
+    rs: "📺 **Paketat e ERiON IPTV** (lekë të vjetra):\n• 1 muaj — 10,000\n• 3 muaj — 16,000\n• 6 muaj — 29,000\n• 12 muaj — 44,000\n• 24 muaj — 65,000\n• 12 muaj / 2 pajisje — 100,000\n• 12 muaj / 3 pajisje — 130,000\n\n45,000+ kanale live, 150,000+ filma e seriale, HD/FHD/4K, FREE TRIAL 24 orë.\n📲 WhatsApp: +355 69 955 2080\n\n![Paketat e ERiON IPTV](iptv-pakot.png)",
+    re: "📺 **ERiON IPTV packages**:\n• 1 month — 10,000\n• 3 months — 16,000\n• 6 months — 29,000\n• 12 months — 44,000\n• 24 months — 65,000\n• 12 months / 2 devices — 100,000\n• 12 months / 3 devices — 130,000\n\n45,000+ live channels, 150,000+ movies & series, HD/FHD/4K, 24h FREE TRIAL.\n📲 WhatsApp: +355 69 955 2080\n\n![ERiON IPTV packages](iptv-pakot.png)",
+  },
+  {
+    ps: ["kush eshte erioni","kush eshte erion nezha","kush eshte erion","me trego per erionin","me fol per erionin"],
+    pe: ["about erion","who is erion","who is erion nezha"],
+    rs: "Erion Nezha është Inxhinier Informatike (Bachelor, Universiteti Europian i Tiranës, 2022–2025) dhe Software Developer me bazë në Tiranë. Krijon aplikacione web & mobile, shërbime IPTV dhe mjete praktike si gjenerues QR kodesh. 💻",
+    re: "Erion Nezha is a Computer Engineer (Bachelor's, European University of Tirana, 2022–2025) and Software Developer based in Tirana. He builds web & mobile apps, IPTV services and handy tools like QR code generators. 💻",
+  },
+  {
+    ps: ["projektet e tij","cilat jane projektet","projektet","cfare projektesh ka","projektet e erionit"],
+    pe: ["his projects","what are his projects","erion projects"],
+    rs: "Projektet e Erionit: 📺 ERiON IPTV • 🎬 FILMA12HD (filma me titra shqip) • 💻 LearnCyberTech (blog teknologjie) • 🔳 QR Code Generator • 🛒 KLIKO BLI (marketplace) • 📚 Biblioteka Online • 🌿 Mrizi i Zanave.",
+    re: "Erion's projects: 📺 ERiON IPTV • 🎬 FILMA12HD (movies with Albanian subtitles) • 💻 LearnCyberTech (tech blog) • 🔳 QR Code Generator • 🛒 KLIKO BLI (marketplace) • 📚 Online Library • 🌿 Mrizi i Zanave.",
+  },
+  {
+    ps: ["aftesite teknike","teknologjite","cfare teknologjish","aftesite","me cfare teknologjish punon"],
+    pe: ["technical skills","his skills","what technologies","his stack"],
+    rs: "Teknologjitë e Erionit: JavaScript, HTML5, CSS3, Bootstrap, TypeScript, Python, Kotlin, Android Studio, Kali Linux. ⚙️",
+    re: "Erion's stack: JavaScript, HTML5, CSS3, Bootstrap, TypeScript, Python, Kotlin, Android Studio, Kali Linux. ⚙️",
+  },
+  {
+    ps: ["kontakti","kontakt","si te kontaktoj","me jep kontaktin","me jep numrin","numri i erionit"],
+    pe: ["contact","how to contact him","contact him","his contact"],
+    rs: "Mund ta kontaktosh Erionin këtu:\n📧 erjonnezhaa@gmail.com\n📞 +355 699 552 080\n📲 WhatsApp: +355 69 955 2080",
+    re: "You can reach Erion here:\n📧 erjonnezhaa@gmail.com\n📞 +355 699 552 080\n📲 WhatsApp: +355 69 955 2080",
+  },
+  {
+    ps: ["kush je ti","kush je","cfare je ti","ti kush je"],
+    pe: ["who are you","what are you"],
+    rs: "Jam Dertli Bot — asistenti personal i Erion Nezhës. 😊",
+    re: "I'm Dertli Bot — Erion Nezha's personal assistant. 😊",
+  },
+  {
+    ps: ["kush te krijoi","kush te ka krijuar","kush eshte krijuesi yt","cili te krijoi"],
+    pe: ["who created you","who made you","who is your creator"],
+    rs: "Krijuesi im është Mr.Erionxx. ✨",
+    re: "My creator is Mr.Erionxx. ✨",
+  },
+  {
+    ps: ["faleminderit","flm","ju faleminderit"],
+    pe: ["thank you","thanks","thx"],
+    rs: "S'ka përse! 😊 Jam këtu kur të duash.",
+    re: "You're welcome! 😊 I'm here whenever you need.",
+  },
+  {
+    ps: ["pershendetje","tungjatjeta","tung"],
+    pe: ["hello","hi","hey"],
+    rs: "Përshëndetje! 👋 Si mund të të ndihmoj?",
+    re: "Hello! 👋 How can I help?",
+  },
+];
+function matchFaq(text) {
+  const n = faqNorm(text);
+  if (!n) return null;
+  const hit = (list) => {
+    for (const p of list) if (n === p || n.indexOf(p + " ") === 0) return true;
+    return false;
+  };
+  for (const e of FAQ) if (hit(e.ps)) return e.rs;
+  for (const e of FAQ) if (hit(e.pe || [])) return e.re || e.rs;
+  return null;
 }
 
 // Parser standard për API-të e formatit OpenAI:
@@ -366,10 +451,22 @@ exports.handler = async (event) => {
           stats.rateLimited +
           "\n" +
           "• Lockdown-e të vendosura: " +
-          stats.lockdownImposed,
+          stats.lockdownImposed +
+          "\n" +
+          "• Përgjigje të shpejta (pa kuotë): " +
+          stats.faqHits,
       });
     }
     return json(200, { reply: "Nuk e njoha këtë komandë. 🤔" });
+  }
+
+  // Pyetjet e shpeshta: përgjigje çast pa djegur kuotë.
+  const faqReply = matchFaq(lastUserText);
+  if (faqReply) {
+    statsDay();
+    stats.total++;
+    stats.faqHits++;
+    return json(200, { reply: faqReply });
   }
 
   // Cloudflare Turnstile (opsional, i padukshëm): aktivizohet vetëm nëse
