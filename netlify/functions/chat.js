@@ -198,6 +198,9 @@ const stats = {
   ratings: { up: 0, down: 0 },  // 👍/👎 nga vizitorët
   candidates: {},   // pyetje reale jo-FAQ (të normalizuara) -> sa herë u bënë
   banner: "",       // njoftimi i pronarit për të gjithë vizitorët
+  welcome: "",      // mesazhi hyrës i personalizuar nga pronari (bosh = ai i paracaktuar)
+  customFaq: [],    // [{q: pyetje e normalizuar, answer: teksti}] — shtuar nga admin
+  history: {},      // "YYYY-MM-DD" -> {total, faqHits, up, down, rateLimited, lockdownImposed}
 };
 function statsDay() {
   const d = new Date().toISOString().slice(0, 10);
@@ -206,6 +209,19 @@ function statsDay() {
     stats.total = 0;
     stats.perLink = {};
     stats.rateLimited = 0;
+    // Arkivoje përmbledhjen e ditës së djeshme për grafikun javor.
+    if (stats.day && stats.total) {
+      stats.history[stats.day] = {
+        total: stats.total,
+        faqHits: stats.faqHits,
+        up: stats.ratings.up,
+        down: stats.ratings.down,
+        rateLimited: stats.rateLimited,
+        lockdownImposed: stats.lockdownImposed,
+      };
+      const days = Object.keys(stats.history).sort();
+      while (days.length > 14) delete stats.history[days.shift()];
+    }
     stats.lockdownImposed = 0;
     stats.faqHits = 0;
     stats.faqTopics = {};
@@ -213,6 +229,7 @@ function statsDay() {
     stats.ratings = { up: 0, down: 0 };
     stats.candidates = {};
     stats.banner = "";
+    // welcome dhe customFaq MBETEN — janë cilësime të pronarit, jo të dhëna ditore.
   }
   return d;
 }
@@ -255,6 +272,9 @@ function handleStats(event) {
       hourly: stats.hourly,
       candidates: cand,
       banner: stats.banner,
+      welcome: stats.welcome,
+      customFaq: stats.customFaq.map(function (e) { return { q: e.q, answer: e.answer }; }),
+      history: stats.history,
     };
     for (const k in pub) full[k] = pub[k];
     return json(200, full);
@@ -320,8 +340,8 @@ const FAQ = [
   {
     ps: ["kush je ti","kush je","cfare je ti","ti kush je"],
     pe: ["who are you","what are you"],
-    rs: "Jam Dertli Bot — asistenti personal i Erion Nezhës. 😊",
-    re: "I'm Dertli Bot — Erion Nezha's personal assistant. 😊",
+    rs: "Jam Dertli Bot — asistenti i Erion Nezhës. 😊",
+    re: "I'm Dertli Bot — Erion Nezha's assistant. 😊",
   },
   {
     ps: ["kush te krijoi","kush te ka krijuar","kush eshte krijuesi yt","cili te krijoi"],
@@ -375,6 +395,15 @@ function detectTopic(text) {
   if (has("erion")) return "erioni";
   return null;
 }
+// Përgjigjet e shpejta të shtuara nga pronari (pas atyre të ndërtuara).
+function matchCustomFaq(text) {
+  const n = faqNorm(text);
+  if (!n || !stats.customFaq.length) return null;
+  for (const e of stats.customFaq) {
+    if (n === e.q || n.indexOf(e.q + " ") === 0) return e;
+  }
+  return null;
+}
 // Gjuha e pyetjes (për chip-at pasues) — heuristikë e thjeshtë.
 function detectLang(text) {
   const n = " " + faqNorm(text) + " ";
@@ -419,6 +448,10 @@ exports.handler = async (event) => {
     if (q && q.banner !== undefined) {
       statsDay();
       return json(200, { banner: stats.banner || "" });
+    }
+    if (q && q.welcome !== undefined) {
+      statsDay();
+      return json(200, { welcome: stats.welcome || "" });
     }
     return handleStats(event);
   }
@@ -554,7 +587,59 @@ exports.handler = async (event) => {
     return json(200, { ok: true, banner: stats.banner });
   }
 
+  // Mesazhi hyrës i personalizuar: vetëm pronari me STATS_TOKEN.
+  if (body.action === "set_welcome") {
+    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
+    if (!ownerToken || String(body.token || "") !== ownerToken) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    statsDay();
+    stats.welcome = String(body.text || "").slice(0, 500);
+    return json(200, { ok: true, welcome: stats.welcome });
+  }
+
+  // Shto përgjigje të shpejtë nga një kandidat: vetëm pronari.
+  if (body.action === "add_faq") {
+    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
+    if (!ownerToken || String(body.token || "") !== ownerToken) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    const qn = faqNorm(String(body.question || "")).slice(0, 120);
+    const an = String(body.answer || "").slice(0, 1000);
+    if (qn.length < 4 || an.length < 4) {
+      return json(400, { error: "Pyetja dhe përgjigjja duhen më të gjata." });
+    }
+    statsDay();
+    if (!stats.customFaq.some(function (e) { return e.q === qn; })) {
+      stats.customFaq.push({ q: qn, answer: an });
+      if (stats.customFaq.length > 100) stats.customFaq.shift();
+    }
+    delete stats.candidates[qn]; // s'është më kandidat — u bë përgjigje e çastit
+    return json(200, { ok: true, count: stats.customFaq.length });
+  }
+
+  // Fshi një përgjigje të shpejtë të shtuar nga pronari.
+  if (body.action === "del_faq") {
+    const ownerToken = String(process.env.STATS_TOKEN || "").trim();
+    if (!ownerToken || String(body.token || "") !== ownerToken) {
+      return json(403, { error: "Nuk lejohet." });
+    }
+    const qn = faqNorm(String(body.question || ""));
+    statsDay();
+    stats.customFaq = stats.customFaq.filter(function (e) { return e.q !== qn; });
+    return json(200, { ok: true, count: stats.customFaq.length });
+  }
+
   // Pyetjet e shpeshta: përgjigje çast pa djegur kuotë.
+  const custom = matchCustomFaq(lastUserText);
+  if (custom) {
+    statsDay();
+    stats.total++;
+    noteHour();
+    stats.faqHits++;
+    stats.faqTopics.custom = (stats.faqTopics.custom || 0) + 1;
+    return json(200, { reply: custom.answer, topic: "custom", lang: detectLang(lastUserText) });
+  }
   const fm = matchFaq(lastUserText);
   if (fm) {
     statsDay();
