@@ -24,7 +24,7 @@ const CONFIG = {
 
 
   // Mesazhi i parë që dërgon bot-i kur hapet faqja
-  WELCOME_MESSAGE: "👋 Përshëndetje! Unë jam Dertli Bot.\n🤖 Asistenti personal i Erion Nezhës\nPyet çfarë të duash. Unë ta gjej përgjigjen. ⚡",
+  WELCOME_MESSAGE: "👋 Përshëndetje! Unë jam Dertli Bot.\n🤖 Asistenti personal i Erion Nezhës\nPyet çfarë të duash, në shqip ose anglisht — unë ta gjej përgjigjen. ⚡\n\n👋 Hello! I'm Dertli Bot.\n🤖 Erion Nezha's personal assistant\nAsk me anything, in Albanian or English — I'll find the answer. ⚡",
 
 
   // Butona sugjerimesh të shpejta (shfaqen poshtë bisedës)
@@ -42,5 +42,12 @@ const CONFIG = {
 
 
   // Ngjyra kryesore e dizajnit
-  THEME_COLOR: "#d4af37"
+  THEME_COLOR: "#d4af37",
+
+
+  // Cloudflare Turnstile (opsional, i padukshëm): çelësi publik i faqes.
+  // Merret te Cloudflare Dashboard → Turnstile → Add site. Pa këtë çelës
+  // (dhe TURNSTILE_SECRET në Netlify env vars), mbrojtja s'aktivizohet
+  // dhe gjithçka punon si më parë.
+  TURNSTILE_SITEKEY: ""
 };
