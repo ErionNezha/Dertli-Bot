@@ -43,9 +43,9 @@
     return html;
   }
 
-  function addMessage(text, who) {
+  function addMessage(text, who, cls) {
     var wrap = document.createElement("div");
-    wrap.className = "message " + who;
+    wrap.className = "message " + who + (cls ? " " + cls : "");
     if (who === "bot") {
       botMsgSeq++;
       var mid = "m" + Date.now() + "-" + botMsgSeq;
@@ -157,6 +157,60 @@
     typingEl = null;
   }
 
+  // --- Cloudflare Turnstile (opsional, i padukshëm) ---
+  // Nëse CONFIG.TURNSTILE_SITEKEY është vendosur, merret një token i padukshëm
+  // për çdo mesazh dhe dërgohet me kërkesën; serveri e verifikon me
+  // TURNSTILE_SECRET. Pa çelësa, gjithçka punon si më parë.
+  var turnstileWidgetId = null;
+  function turnstileReady() {
+    var key = CONFIG.TURNSTILE_SITEKEY || "";
+    if (!key) return;
+    var s = document.createElement("script");
+    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    s.async = true;
+    s.defer = true;
+    s.onload = function () {
+      try {
+        var div = document.createElement("div");
+        div.id = "cf-turnstile";
+        div.style.display = "none";
+        document.body.appendChild(div);
+        turnstileWidgetId = window.turnstile.render("#cf-turnstile", {
+          sitekey: key,
+          size: "invisible"
+        });
+      } catch (e) { /* pa Turnstile — vazhdohet normalisht */ }
+    };
+    document.head.appendChild(s);
+  }
+  function turnstileToken() {
+    return new Promise(function (resolve) {
+      try {
+        if (turnstileWidgetId === null || !window.turnstile) { resolve(""); return; }
+        var done = false;
+        var to = setTimeout(function () { if (!done) { done = true; resolve(""); } }, 4000);
+        window.turnstile.execute(turnstileWidgetId, {
+          action: "chat",
+          callback: function (tok) { if (!done) { done = true; clearTimeout(to); resolve(tok || ""); } }
+        });
+      } catch (e) { resolve(""); }
+    });
+  }
+
+  // --- Numëruesi publik "sot" (pa kosto, pa të dhëna sensitive) ---
+  function loadTodayCount() {
+    try {
+      fetch(ENDPOINT + "?stats=1").then(function (r) {
+        return r.ok ? r.json() : null;
+      }).then(function (s) {
+        if (s && typeof s.total === "number") {
+          var el = document.getElementById("today-count");
+          if (el) el.textContent = "· " + s.total + " sot";
+        }
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   function send(text) {
     text = (text || "").trim();
     if (!text || sending) return;
@@ -185,13 +239,17 @@
     sendBtn.disabled = true;
     showTyping();
 
-    fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    turnstileToken().then(function (cfToken) {
+      var payload = {
         messages: history,
         systemPrompt: CONFIG.SYSTEM_PROMPT
-      })
+      };
+      if (cfToken) payload.cfToken = cfToken;
+      return fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
     })
       .then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (data) {
@@ -204,7 +262,11 @@
             throw new Error(out.data.message);
           }
           if (out.status === 429) {
-            throw new Error("Ke dërguar shumë mesazhe në një kohë të shkurtër. Pusho pak dhe provo përsëri pas disa minutash. ⏳");
+            var msg429 = (out.data && out.data.message) ||
+              "Ke dërguar shumë mesazhe në një kohë të shkurtër. Pusho pak dhe provo përsëri pas disa minutash. ⏳";
+            var e429 = new Error(msg429);
+            e429.isLockdown = !!(out.data && out.data.error === "LOCKDOWN");
+            throw e429;
           }
           // Demo statike në GitHub Pages: nuk ka backend Netlify këtu.
           if (out.status === 404 || out.status === 405) {
@@ -221,7 +283,7 @@
         if (err.message === "STATIC_DEMO" || err instanceof TypeError) {
           addMessage("⚠️ Kjo faqe është demo statike (GitHub Pages) dhe nuk ka lidhje me serverin. Bisedo me Dertli Bot live këtu: https://dertlibot.netlify.app 💬", "bot");
         } else {
-          addMessage("⚠️ " + err.message, "bot");
+          addMessage("⚠️ " + err.message, "bot", err.isLockdown ? "lockdown" : "");
         }
       })
       .then(function () {
@@ -313,6 +375,8 @@
     document.documentElement.style.setProperty("--primary", CONFIG.THEME_COLOR);
 
     showWelcome();
+    turnstileReady();
+    loadTodayCount();
 
     (CONFIG.SUGGESTIONS || []).forEach(function (s) {
       var chip = document.createElement("button");
