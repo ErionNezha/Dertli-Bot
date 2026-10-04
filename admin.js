@@ -7,14 +7,6 @@ function esc(s){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
   });
 }
-function postAct(action, extra){
-  var body = Object.assign({ action: action, token: token }, extra || {});
-  return fetch("/.netlify/functions/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Stats-Token": token },
-    body: JSON.stringify(body)
-  }).then(function(r){ if(!r.ok) throw new Error("http " + r.status); return r.json(); });
-}
 function fetchStats(){
   return fetch("/.netlify/functions/chat?stats=1", { headers: { "X-Stats-Token": token } })
     .then(function(r){ if(!r.ok) throw new Error("http"); return r.json(); });
@@ -261,17 +253,19 @@ function openCandForm(row, question){
   row.parentNode.insertBefore(f, row.nextSibling);
 }
 function ownerPost(body){
+  var b = Object.assign({}, body);
+  delete b.token; // tokeni dërgohet VETËM në headerin X-Stats-Token, kurrë në body
   return fetch("/.netlify/functions/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    headers: { "Content-Type": "application/json", "X-Stats-Token": token },
+    body: JSON.stringify(b)
   }).then(function(r){ return r.json(); });
 }
 function setBanner(text){
   return fetch("/.netlify/functions/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "set_banner", token: token, text: text })
+    headers: { "Content-Type": "application/json", "X-Stats-Token": token },
+    body: JSON.stringify({ action: "set_banner", text: text })
   }).then(function(r){ return r.json(); });
 }
 document.getElementById("go").addEventListener("click", function(){
