@@ -100,15 +100,13 @@ function noteAbuse(ip) {
   e.count++;
   e.last = new Date().toISOString();
 }
-// Autorizimi i pronarit: header X-Stats-Token (mënyra e sigurt); body.token mbahet
-// si rezervë sepse dashboard-i e dërgon edhe aty. Tokeni NUK pranohet kurrë në URL.
-function ownerAuthorized(event, body) {
+// Autorizimi i pronarit: VETËM header X-Stats-Token. Tokeni NUK pranohet
+// kurrë në body (log-ohet më lehtë) e as në URL.
+function ownerAuthorized(event) {
   const t = String(process.env.STATS_TOKEN || "").trim();
   if (!t) return false;
   const h = (event && event.headers) || {};
-  const given = String(
-    h["x-stats-token"] || h["X-Stats-Token"] || (body && body.token) || ""
-  );
+  const given = String(h["x-stats-token"] || h["X-Stats-Token"] || "");
   return given === t;
 }
 // Batuta pa kuotë — zgjidhet rastësisht.
@@ -136,7 +134,7 @@ function matchJoke(text) {
   // (detectLang bie në default shqip për fraza të shkurtra si "tell me a joke").
   const en = /(joke|funny)/i.test(text);
   const arr = en ? JOKES_EN : JOKES_SQ;
-  return arr[Math.floor(Math.random() * arr.length)];
+  return { text: arr[Math.floor(Math.random() * arr.length)], lang: en ? "en" : "sq" };
 }
 
 function clientIp(event) {
@@ -678,7 +676,7 @@ exports.handler = async (event) => {
 
   // Banner-i i njoftimit: vetëm pronari me STATS_TOKEN.
   if (body.action === "set_banner") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     statsDay();
@@ -688,7 +686,7 @@ exports.handler = async (event) => {
 
   // Mesazhi hyrës i personalizuar: vetëm pronari me STATS_TOKEN.
   if (body.action === "set_welcome") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     statsDay();
@@ -698,7 +696,7 @@ exports.handler = async (event) => {
 
   // Shto përgjigje të shpejtë nga një kandidat: vetëm pronari.
   if (body.action === "add_faq") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     const qn = faqNorm(String(body.question || "")).slice(0, 120);
@@ -717,7 +715,7 @@ exports.handler = async (event) => {
 
   // Fshi një përgjigje të shpejtë të shtuar nga pronari.
   if (body.action === "del_faq") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     const qn = faqNorm(String(body.question || ""));
@@ -728,7 +726,7 @@ exports.handler = async (event) => {
 
   // Blloko IP manualisht: vetëm pronari.
   if (body.action === "block_ip" || body.action === "unblock_ip") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     const ip = String(body.ip || "").trim();
@@ -740,7 +738,7 @@ exports.handler = async (event) => {
 
   // Fshi një lead: vetëm pronari.
   if (body.action === "del_lead") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     const idx = parseInt(body.idx, 10);
@@ -750,7 +748,7 @@ exports.handler = async (event) => {
 
   // Fshi një sugjerim: vetëm pronari.
   if (body.action === "del_suggestion") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     const idx = parseInt(body.idx, 10);
@@ -760,7 +758,7 @@ exports.handler = async (event) => {
 
   // Eksporto cilësimet (welcome, banner, FAQ custom): vetëm pronari.
   if (body.action === "export_settings") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     return json(200, {
@@ -771,7 +769,7 @@ exports.handler = async (event) => {
 
   // Importo cilësimet: vetëm pronari.
   if (body.action === "import_settings") {
-    if (!ownerAuthorized(event, body)) {
+    if (!ownerAuthorized(event)) {
       return json(403, { error: "Nuk lejohet." });
     }
     const d = body.data || {};
@@ -796,7 +794,7 @@ exports.handler = async (event) => {
     noteHour();
     stats.faqHits++;
     stats.faqTopics.joke = (stats.faqTopics.joke || 0) + 1;
-    return json(200, { reply: joke, topic: "custom", lang: detectLang(lastUserText) });
+    return json(200, { reply: joke.text, topic: "custom", lang: joke.lang });
   }
   const custom = matchCustomFaq(lastUserText);
   if (custom) {
