@@ -430,39 +430,77 @@
     send(input.value);
   });
 
-  // --- Zëri (mikrofon): Web Speech API, shqip ---
+  // --- Zëri (mikrofon): regjistrim + Whisper në server (punon në çdo browser) ---
   var micBtn = $("mic-btn");
-  var recognition = null;
-  var recognizing = false;
+  var mediaRecorder = null, recStream = null, recChunks = [], recording = false, recTimer = null;
   function toggleVoice() {
-    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      addMessage("⚠️ Shfletuesi yt nuk e mbështet diktimin me zë. Provo Chrome-in.", "bot");
+    if (recording) { stopRecording(); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      addMessage("⚠️ Shfletuesi yt nuk e mbështet regjistrimin e zërit.", "bot");
       return;
     }
-    if (recognizing) { try { recognition.stop(); } catch (e) {} return; }
-    recognition = new SR();
-    recognition.lang = "sq-AL";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onresult = function (e) {
-      var t = e.results[0][0].transcript;
-      input.value = (input.value ? input.value + " " : "") + t;
-      input.focus();
-    };
-    recognition.onend = function () {
-      recognizing = false;
-      micBtn.classList.remove("recording");
-    };
-    recognition.onerror = function () {
-      recognizing = false;
-      micBtn.classList.remove("recording");
-    };
-    try {
-      recognition.start();
-      recognizing = true;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var mime = "audio/webm";
+      try {
+        if (window.MediaRecorder && !MediaRecorder.isTypeSupported("audio/webm")) mime = "audio/mp4";
+        mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+      } catch (e) {
+        try { mediaRecorder = new MediaRecorder(stream); } catch (e2) {
+          addMessage("⚠️ Shfletuesi yt nuk e mbështet regjistrimin e zërit.", "bot");
+          return;
+        }
+      }
+      recStream = stream;
+      recChunks = [];
+      mediaRecorder.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
+      mediaRecorder.onstop = sendRecording;
+      try { mediaRecorder.start(); } catch (e) { return; }
+      recording = true;
       micBtn.classList.add("recording");
-    } catch (e) {}
+      micBtn.textContent = "⏹️";
+      recTimer = setTimeout(stopRecording, 90000); // max 90s
+    }).catch(function () {
+      addMessage("⚠️ Nuk mora leje për mikrofonin. Lejoje nga shfletuesi dhe provo përsëri.", "bot");
+    });
+  }
+  function stopRecording() {
+    if (!recording) return;
+    recording = false;
+    if (recTimer) { clearTimeout(recTimer); recTimer = null; }
+    micBtn.classList.remove("recording");
+    micBtn.textContent = "🎤";
+    try { if (mediaRecorder) mediaRecorder.stop(); } catch (e) {}
+    if (recStream) { recStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} }); recStream = null; }
+  }
+  function sendRecording() {
+    if (!recChunks.length) { micBtn.textContent = "🎤"; return; }
+    var mime = (mediaRecorder && mediaRecorder.mimeType) || "audio/webm";
+    var blob = new Blob(recChunks, { type: mime });
+    recChunks = [];
+    micBtn.textContent = "⏳";
+    var reader = new FileReader();
+    reader.onload = function () {
+      var b64 = String(reader.result || "").split(",")[1] || "";
+      fetch(VOICE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "transcribe", audio: b64, mime: mime })
+      }).then(function (r) {
+        return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+      }).then(function (res) {
+        micBtn.textContent = "🎤";
+        if (res.ok && res.d && res.d.text) {
+          input.value = (input.value ? input.value + " " : "") + res.d.text;
+          input.focus();
+        } else {
+          addMessage("⚠️ S'munda ta kuptoj zërin. Provo përsëri.", "bot");
+        }
+      }).catch(function () {
+        micBtn.textContent = "🎤";
+        addMessage("⚠️ S'munda ta kuptoj zërin. Provo përsëri.", "bot");
+      });
+    };
+    reader.readAsDataURL(blob);
   }
   if (micBtn) micBtn.addEventListener("click", toggleVoice);
 
