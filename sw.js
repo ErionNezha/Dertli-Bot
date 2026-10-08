@@ -1,5 +1,5 @@
 // Dertli Bot — service worker minimal (vetëm cache i shell-it statik).
-var CACHE = "dertli-v4";
+var CACHE = "dertli-v5";
 var ASSETS = ["./", "index.html", "style.css", "app.js", "config.js", "logo.png", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
