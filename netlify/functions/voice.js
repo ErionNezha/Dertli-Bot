@@ -3,7 +3,7 @@
 // Shtresë zëri mbi bisedën ekzistuese. chat.js NUK preket.
 //
 // POST /.netlify/functions/voice   { "text": "..." }
-//   → audio/mpeg (mp3)
+//   → audio/wav (24 kHz mono)
 //
 // Mbrojtjet (njësoj si chat.js):
 //   - origin check: vetëm dertlibot.netlify.app (+ ALLOWED_ORIGINS)
@@ -15,7 +15,9 @@
 
 const TTS_TIMEOUT_MS = 25000;
 const MAX_TEXT_LEN = 600;
-const VOICE = "nova";
+const TTS_MODEL = "gemini-3.8-flash-tts";
+const TTS_MODEL_FALLBACK = "gemini-2.5-flash-preview-tts";
+const TTS_VOICE = "Kore";
 
 function json(statusCode, obj) {
   return {
@@ -173,34 +175,136 @@ exports.handler = async (event) => {
     return json(400, { error: "S'ka tekst për t'u lexuar." });
   }
 
-  const url =
-    "https://text.pollinations.ai/" +
-    encodeURIComponent(text) +
-    "?model=openai-audio&voice=" +
-    VOICE;
-
-  let resp;
-  try {
-    resp = await fetchWithTimeout(url, {}, TTS_TIMEOUT_MS);
-  } catch (e) {
-    return json(502, { error: "Zëri s'mundi të gjenerohet tani. Provo përsëri pas pak. 🙏" });
-  }
-  if (!resp.ok) {
+  const keys = [
+    process.env.GEMINI_KEY_2,
+    process.env.FALLBACK_KEY,
+  ].filter(Boolean);
+  if (!keys.length) {
     return json(502, { error: "Zëri s'mundi të gjenerohet tani. Provo përsëri pas pak. 🙏" });
   }
 
-  const buf = Buffer.from(await resp.arrayBuffer());
-  if (!buf.length) {
-    return json(502, { error: "Zëri s'mundi të gjenerohet tani. Provo përsëri pas pak. 🙏" });
-  }
+  const ttsError = () =>
+    json(502, { error: "Zëri s'mundi të gjenerohet tani. Provo përsëri pas pak. 🙏" });
 
+  for (const key of keys) {
+    // Rruga 1: Interactions API → kthen WAV të plotë.
+    try {
+      const wav = await ttsInteractions(key, text);
+      if (wav && wav.length) return audioResponse(wav);
+    } catch (e) { /* provo rrugën tjetër */ }
+    // Rruga 2 (rezervë): generateContent klasik → PCM → mbështjellë në WAV.
+    try {
+      const wav = await ttsGenerateContent(key, text);
+      if (wav && wav.length) return audioResponse(wav);
+    } catch (e) { /* provo çelësin tjetër */ }
+  }
+  return ttsError();
+};
+
+function audioResponse(wavBuf) {
   return {
     statusCode: 200,
     headers: {
-      "Content-Type": "audio/mpeg",
+      "Content-Type": "audio/wav",
       "Cache-Control": "no-store",
     },
-    body: buf.toString("base64"),
+    body: wavBuf.toString("base64"),
     isBase64Encoded: true,
   };
-};
+}
+
+async function ttsInteractions(key, text) {
+  const resp = await fetchWithTimeout(
+    "https://generativelanguage.googleapis.com/v1beta/interactions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": key,
+      },
+      body: JSON.stringify({
+        model: TTS_MODEL,
+        input: [
+          {
+            type: "user_input",
+            content: [
+              {
+                type: "text",
+                text: text,
+                annotations: [
+                  { type: "speech_metadata", style: "warm, friendly, natural" },
+                ],
+              },
+            ],
+          },
+        ],
+        response_format: { type: "audio", mime_type: "audio/wav", sample_rate: 24000 },
+        generation_config: { speech_config: [{ voice: TTS_VOICE }] },
+      }),
+    },
+    TTS_TIMEOUT_MS
+  );
+  if (!resp.ok) throw new Error("interactions http " + resp.status);
+  const data = await resp.json();
+  const steps = data.steps || [];
+  for (const s of steps) {
+    if (s.type !== "model_output" || !Array.isArray(s.content)) continue;
+    for (const c of s.content) {
+      if (c.type === "audio" && c.data) return Buffer.from(c.data, "base64");
+    }
+  }
+  throw new Error("no audio in interactions response");
+}
+
+async function ttsGenerateContent(key, text) {
+  const resp = await fetchWithTimeout(
+    "https://generativelanguage.googleapis.com/v1beta/models/" +
+      TTS_MODEL_FALLBACK +
+      ":generateContent",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": key,
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: text }] }],
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOICE } },
+          },
+        },
+      }),
+    },
+    TTS_TIMEOUT_MS
+  );
+  if (!resp.ok) throw new Error("generateContent http " + resp.status);
+  const data = await resp.json();
+  const parts =
+    (((data.candidates || [])[0] || {}).content || {}).parts || [];
+  for (const p of parts) {
+    const b64 = p.inlineData && p.inlineData.data;
+    if (b64) return pcmToWav(Buffer.from(b64, "base64"), 24000);
+  }
+  throw new Error("no audio in generateContent response");
+}
+
+// PCM 16-bit mono → WAV (44-byte header).
+function pcmToWav(pcm, sampleRate) {
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0);
+  h.writeUInt32LE(36 + pcm.length, 4);
+  h.write("WAVE", 8);
+  h.write("fmt ", 12);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20); // PCM
+  h.writeUInt16LE(1, 22); // mono
+  h.writeUInt32LE(sampleRate, 24);
+  h.writeUInt32LE(sampleRate * 2, 28);
+  h.writeUInt16LE(2, 32);
+  h.writeUInt16LE(16, 34);
+  h.write("data", 36);
+  h.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([h, pcm]);
+}
