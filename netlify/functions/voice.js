@@ -236,10 +236,9 @@ async function handleTranscribe(body) {
   fd.append("response_format", "json");
 
   let resp;
-  const dbg = {};
   try {
     resp = await fetchWithTimeout(
-      "https://api.groq.com/openai/audio/transcriptions",
+      "https://api.groq.com/openai/v1/audio/transcriptions",
       {
         method: "POST",
         headers: { Authorization: "Bearer " + groqKey },
@@ -248,12 +247,10 @@ async function handleTranscribe(body) {
       TTS_TIMEOUT_MS
     );
   } catch (e) {
-    return json(502, { error: "S'munda ta kuptoj zërin. Provo përsëri. 🙏", debug: { where: "fetch", msg: String(e && e.message || e).slice(0, 120) } });
+    return json(502, { error: "S'munda ta kuptoj zërin. Provo përsëri. 🙏" });
   }
   if (!resp.ok) {
-    let b = "";
-    try { b = (await resp.text()).slice(0, 200); } catch (e) {}
-    return json(502, { error: "S'munda ta kuptoj zërin. Provo përsëri. 🙏", debug: { where: "groq", status: resp.status, body: b } });
+    return json(502, { error: "S'munda ta kuptoj zërin. Provo përsëri. 🙏" });
   }
   let data;
   try {
