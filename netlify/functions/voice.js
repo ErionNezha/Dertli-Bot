@@ -17,7 +17,7 @@ const TTS_TIMEOUT_MS = 25000;
 const MAX_TEXT_LEN = 600;
 const TTS_MODEL = "gemini-3.8-flash-tts";
 const TTS_MODEL_FALLBACK = "gemini-2.5-flash-preview-tts";
-const DEFAULT_VOICE = "Kore";
+const DEFAULT_VOICE = "Charon"; // zë burri, i thellë — përfaqëson Dertlin
 // Zërat e lejuar (30 zërat e Gemini TTS) — vlera nga klienti validohet.
 const ALLOWED_VOICES = [
   "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
@@ -179,6 +179,9 @@ exports.handler = async (event) => {
   }
 
   const text = cleanForSpeech(body.text);
+  if (body.action === "transcribe") {
+    return await handleTranscribe(body);
+  }
   if (!text) {
     return json(400, { error: "S'ka tekst për t'u lexuar." });
   }
@@ -200,17 +203,67 @@ exports.handler = async (event) => {
   for (const key of keys) {
     // Rruga 1: Interactions API → kthen WAV të plotë.
     try {
-      const wav = await ttsInteractions(key, text);
+      const wav = await ttsInteractions(key, text, voice);
       if (wav && wav.length) return audioResponse(wav);
     } catch (e) { /* provo rrugën tjetër */ }
     // Rruga 2 (rezervë): generateContent klasik → PCM → mbështjellë në WAV.
     try {
-      const wav = await ttsGenerateContent(key, text);
+      const wav = await ttsGenerateContent(key, text, voice);
       if (wav && wav.length) return audioResponse(wav);
     } catch (e) { /* provo çelësin tjetër */ }
   }
   return ttsError();
 };
+
+// ---- Transkriptim zë→tekst (Whisper përmes Groq) ----
+async function handleTranscribe(body) {
+  const b64 = String(body.audio || "");
+  if (!b64 || b64.length > 8 * 1024 * 1024) {
+    return json(400, { error: "Audio e pavlefshme." });
+  }
+  const groqKey = process.env.GROQ_KEY;
+  if (!groqKey) {
+    return json(502, { error: "Shërbimi i zërit s'është gati. Provo përsëri pas pak. 🙏" });
+  }
+  const mime = String(body.mime || "audio/webm");
+  const ext = mime.indexOf("mp4") !== -1 ? "mp4" : "webm";
+  const buf = Buffer.from(b64, "base64");
+
+  const fd = new FormData();
+  fd.append("file", new Blob([buf], { type: mime }), "voice." + ext);
+  fd.append("model", "whisper-large-v3-turbo");
+  fd.append("language", "sq");
+  fd.append("response_format", "json");
+
+  let resp;
+  try {
+    resp = await fetchWithTimeout(
+      "https://api.groq.com/openai/audio/transcriptions",
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer " + groqKey },
+        body: fd,
+      },
+      TTS_TIMEOUT_MS
+    );
+  } catch (e) {
+    return json(502, { error: "S'munda ta kuptoj zërin. Provo përsëri. 🙏" });
+  }
+  if (!resp.ok) {
+    return json(502, { error: "S'munda ta kuptoj zërin. Provo përsëri. 🙏" });
+  }
+  let data;
+  try {
+    data = await resp.json();
+  } catch (e) {
+    return json(502, { error: "S'munda ta kuptoj zërin. Provo përsëri. 🙏" });
+  }
+  const text = String(data.text || "").trim();
+  if (!text) {
+    return json(502, { error: "S'munda ta kuptoj zërin. Provo përsëri. 🙏" });
+  }
+  return json(200, { text: text });
+}
 
 function audioResponse(wavBuf) {
   return {
@@ -224,7 +277,7 @@ function audioResponse(wavBuf) {
   };
 }
 
-async function ttsInteractions(key, text) {
+async function ttsInteractions(key, text, voice) {
   const resp = await fetchWithTimeout(
     "https://generativelanguage.googleapis.com/v1beta/interactions",
     {
@@ -267,7 +320,7 @@ async function ttsInteractions(key, text) {
   throw new Error("no audio in interactions response");
 }
 
-async function ttsGenerateContent(key, text) {
+async function ttsGenerateContent(key, text, voice) {
   const resp = await fetchWithTimeout(
     "https://generativelanguage.googleapis.com/v1beta/models/" +
       TTS_MODEL_FALLBACK +
