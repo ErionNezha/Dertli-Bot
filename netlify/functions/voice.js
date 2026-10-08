@@ -17,7 +17,15 @@ const TTS_TIMEOUT_MS = 25000;
 const MAX_TEXT_LEN = 600;
 const TTS_MODEL = "gemini-3.8-flash-tts";
 const TTS_MODEL_FALLBACK = "gemini-2.5-flash-preview-tts";
-const TTS_VOICE = "Kore";
+const DEFAULT_VOICE = "Kore";
+// Zërat e lejuar (30 zërat e Gemini TTS) — vlera nga klienti validohet.
+const ALLOWED_VOICES = [
+  "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
+  "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
+  "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar",
+  "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
+  "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat",
+];
 
 function json(statusCode, obj) {
   return {
@@ -174,6 +182,9 @@ exports.handler = async (event) => {
   if (!text) {
     return json(400, { error: "S'ka tekst për t'u lexuar." });
   }
+  const voice = ALLOWED_VOICES.indexOf(String(body.voice || "")) !== -1
+    ? String(body.voice)
+    : DEFAULT_VOICE;
 
   const keys = [
     process.env.GEMINI_KEY_2,
@@ -239,7 +250,7 @@ async function ttsInteractions(key, text) {
           },
         ],
         response_format: { type: "audio", mime_type: "audio/wav", sample_rate: 24000 },
-        generation_config: { speech_config: [{ voice: TTS_VOICE }] },
+        generation_config: { speech_config: [{ voice: voice }] },
       }),
     },
     TTS_TIMEOUT_MS
@@ -272,7 +283,7 @@ async function ttsGenerateContent(key, text) {
         generationConfig: {
           responseModalities: ["AUDIO"],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOICE } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
           },
         },
       }),
