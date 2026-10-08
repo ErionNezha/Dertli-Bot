@@ -53,8 +53,9 @@
         + '<button type="button" class="msg-act fb-up" title="Më pëlqeu">👍</button>'
         + '<button type="button" class="msg-act fb-down" title="Nuk më pëlqeu">👎</button>'
         + '<button type="button" class="msg-act sg-open" title="💡">💡</button>'
+        + '<button type="button" class="msg-act spk" title="Dëgjo me zë">🔊</button>'
         + "</div></div>";
-      wireMessageActions(wrap, mid);
+      wireMessageActions(wrap, mid, text);
       if (topic) addFollowups(wrap, topic, lang);
     } else {
       wrap.innerHTML = '<div class="bubble">' + formatText(text) + "</div>";
@@ -111,9 +112,10 @@
       + '<button type="button" class="msg-act fb-up" title="Më pëlqeu">👍</button>'
       + '<button type="button" class="msg-act fb-down" title="Nuk më pëlqeu">👎</button>'
       + '<button type="button" class="msg-act sg-open" title="💡">💡</button>'
+      + '<button type="button" class="msg-act spk" title="Dëgjo me zë">🔊</button>'
       + "</div></div>";
     messagesEl.appendChild(wrap);
-    wireMessageActions(wrap, mid);
+    wireMessageActions(wrap, mid, text);
     var twText = wrap.querySelector(".tw-text");
     var caret = wrap.querySelector(".tw-caret");
     var chars = Array.from(String(text));
@@ -136,7 +138,7 @@
   }
 
   // --- Vlerësimi 👍/👎 (ruhet vetëm lokalisht) ---
-  function wireMessageActions(wrap, mid) {
+  function wireMessageActions(wrap, mid, speakText) {
     var up = wrap.querySelector(".fb-up"), down = wrap.querySelector(".fb-down");
     function paint() {
       var v = feedbackStore[mid];
@@ -163,7 +165,44 @@
     if (down) down.addEventListener("click", function () { vote("down"); });
     var sg = wrap.querySelector(".sg-open");
     if (sg) sg.addEventListener("click", function () { openSuggestForm(wrap); });
+    var spk = wrap.querySelector(".spk");
+    if (spk) spk.addEventListener("click", function () { toggleSpeak(spk, speakText); });
     paint();
+  }
+
+  // --- Zëri i Dertlit (TTS): lexo përgjigjen me zë ---
+  var VOICE_ENDPOINT = "/.netlify/functions/voice";
+  var speakAudio = null, speakBtn = null;
+  function stopSpeak() {
+    if (speakAudio) { try { speakAudio.pause(); } catch (e) {} speakAudio = null; }
+    if (speakBtn) { speakBtn.textContent = "🔊"; speakBtn.classList.remove("active"); speakBtn = null; }
+  }
+  function toggleSpeak(btn, text) {
+    if (speakBtn === btn) { stopSpeak(); return; } // klik i dytë = ndalo
+    stopSpeak();
+    if (!text || !String(text).trim()) return;
+    btn.textContent = "⏳"; btn.classList.add("active"); speakBtn = btn;
+    fetch(VOICE_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: String(text).slice(0, 2000) })
+    }).then(function (r) {
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.blob();
+    }).then(function (blob) {
+      if (speakBtn !== btn) return; // përdoruesi e ndaloi ndërkohë
+      var url = URL.createObjectURL(blob);
+      var audio = new Audio(url);
+      speakAudio = audio;
+      btn.textContent = "🔇";
+      audio.onended = function () { stopSpeak(); try { URL.revokeObjectURL(url); } catch (e) {} };
+      audio.onerror = function () { stopSpeak(); };
+      var p = audio.play();
+      if (p && p.catch) p.catch(function () { stopSpeak(); });
+    }).catch(function () {
+      stopSpeak();
+      addMessage("⚠️ Zëri s'mundi të gjenerohet tani. Provo përsëri pas pak.", "bot");
+    });
   }
 
   function addImageMessage(dataUrl, caption, who) {
